@@ -1,4 +1,4 @@
-import { Feature, Slot } from '@wixc3/engine-core';
+import { Feature, Slot } from '@dazl/engine-core';
 import type React from 'react';
 import reactRendererFeature, { MainEnv } from './react-renderer.feature.js';
 

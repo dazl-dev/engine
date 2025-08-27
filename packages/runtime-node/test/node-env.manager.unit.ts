@@ -1,11 +1,11 @@
 import { expect } from 'chai';
-import { BaseHost, COM, Communication, WsClientHost } from '@wixc3/engine-core';
+import { BaseHost, COM, Communication, WsClientHost } from '@dazl/engine-core';
 import {
     launchEngineHttpServer,
     NodeEnvManager,
     type NodeEnvsFeatureMapping,
     WsServerHost,
-} from '@wixc3/engine-runtime-node';
+} from '@dazl/engine-runtime-node';
 import { aEnv, bEnv } from '../test-kit/feature/envs.js';
 import { EchoService } from '../test-kit/feature/types.js';
 import { runEnv as runAEnv } from '../test-kit/entrypoints/a.node.js';

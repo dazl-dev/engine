@@ -1,4 +1,4 @@
-import { socketClientInitializer } from '@wixc3/engine-core';
+import { socketClientInitializer } from '@dazl/engine-core';
 import sampleFeature, { mainEnv, serverEnv } from './x.feature.js';
 
 sampleFeature.setup(mainEnv, ({ run, echoService }, { COM: { communication } }) => {

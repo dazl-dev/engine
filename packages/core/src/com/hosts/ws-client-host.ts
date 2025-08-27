@@ -1,7 +1,7 @@
 import { io, Socket, type SocketOptions } from 'socket.io-client';
 import type { Message } from '../message-types.js';
 import { BaseHost } from './base-host.js';
-import { EventEmitter, IDisposable, SafeDisposable } from '@wixc3/patterns';
+import { EventEmitter, IDisposable, SafeDisposable } from '@dazl/patterns';
 import { deferred } from 'promise-assist';
 
 export class WsClientHost extends BaseHost implements IDisposable {

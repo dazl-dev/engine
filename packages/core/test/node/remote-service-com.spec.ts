@@ -1,4 +1,4 @@
-import { BaseHost, Communication, declareComEmitter } from '@wixc3/engine-core';
+import { BaseHost, Communication, declareComEmitter } from '@dazl/engine-core';
 import * as chai from 'chai';
 import { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';

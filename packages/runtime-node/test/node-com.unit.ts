@@ -6,10 +6,10 @@ import {
     socketClientInitializer,
     type DisposeMessage,
     type Message,
-} from '@wixc3/engine-core';
-import { IPCHost, WsServerHost } from '@wixc3/engine-runtime-node';
-import { createDisposables } from '@wixc3/create-disposables';
-import { createWaitForCall } from '@wixc3/wait-for-call';
+} from '@dazl/engine-core';
+import { IPCHost, WsServerHost } from '@dazl/engine-runtime-node';
+import { createDisposables } from '@dazl/create-disposables';
+import { createWaitForCall } from '@dazl/wait-for-call';
 import { expect } from 'chai';
 import { safeListeningHttpServer } from 'create-listening-server';
 import { fork } from 'node:child_process';

@@ -1,4 +1,4 @@
-import { Feature } from '@wixc3/engine-core';
+import { Feature } from '@dazl/engine-core';
 import MultiEnvFeature, { contextualEnv } from '../feature/some-feature.feature.js';
 
 export default class ServerMultiEnvFeature extends Feature<'serverMultiEnvFeature'> {

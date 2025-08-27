@@ -4,7 +4,7 @@ import {
     EnvironmentContext,
     flattenTree,
     type FeatureClass,
-} from '@wixc3/engine-core';
+} from '@dazl/engine-core';
 import { basename } from 'node:path';
 import { parseFeatureFileName } from './build-constants.js';
 import type { IFeatureDefinition, IFeatureModule } from '../types.js';

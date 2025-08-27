@@ -1,4 +1,4 @@
-import { SetMultiMap } from '@wixc3/patterns';
+import { SetMultiMap } from '@dazl/patterns';
 import type { RuntimeEngine } from '../runtime-engine.js';
 import { ENGINE, IDENTIFY_API, RUN_OPTIONS } from '../symbols.js';
 import type {
@@ -27,7 +27,7 @@ const instantiateFeatureSymbol = Symbol('instantiateFeature');
 
 /**
  @example
-    import { Feature, Config } from '@wixc3/engine-core';
+    import { Feature, Config } from '@dazl/engine-core';
     import { FeatureA } from './a.feature';
     import { FeatureB } from './b.feature';
 
@@ -246,11 +246,7 @@ export type SettingUpFeature<F extends FeatureClass, E extends AnyEnvironment> =
 
 export type SetupHandler<F extends FeatureClass, E extends AnyEnvironment> = (
     feature: SettingUpFeature<F, E>,
-    runningFeatures: RunningFeatures<
-        InstanceType<F>['dependencies'],
-        InstanceType<F>['optionalDependencies'],
-        E
-    >,
+    runningFeatures: RunningFeatures<InstanceType<F>['dependencies'], InstanceType<F>['optionalDependencies'], E>,
     context: MapRecordType<NonNullable<InstanceType<F>['context']>>,
 ) => RegisteringFeature<InstanceType<F>['api'], OmitCompositeEnvironment<E>>;
 

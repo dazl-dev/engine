@@ -1,5 +1,5 @@
-import { SetMultiMap } from '@wixc3/patterns';
-import { mergeAll, mergeResults } from '@wixc3/engine-cli';
+import { SetMultiMap } from '@dazl/patterns';
+import { mergeAll, mergeResults } from '@dazl/engine-cli';
 import { expect } from 'chai';
 
 describe('mergeAll', () => {

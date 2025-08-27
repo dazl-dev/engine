@@ -1,4 +1,4 @@
-import { COM, Environment, Feature, Service } from '@wixc3/engine-core';
+import { COM, Environment, Feature, Service } from '@dazl/engine-core';
 import type { MyInterfaceClass } from './interface.js';
 
 export const MAIN = new Environment('main', 'window', 'single');

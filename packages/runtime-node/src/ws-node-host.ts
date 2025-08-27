@@ -1,6 +1,6 @@
 import type io from 'socket.io';
-import { BaseHost, type Message } from '@wixc3/engine-core';
-import { SafeDisposable, type IDisposable } from '@wixc3/patterns';
+import { BaseHost, type Message } from '@dazl/engine-core';
+import { SafeDisposable, type IDisposable } from '@dazl/patterns';
 
 export class WsHost extends BaseHost {
     constructor(private socket: io.Socket) {

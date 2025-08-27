@@ -1,4 +1,4 @@
-import { Worker } from '@wixc3/isomorphic-worker/worker';
+import { Worker } from '@dazl/isomorphic-worker/worker';
 import { parentPort } from 'node:worker_threads';
 
 const prefix = 'rpcCall';

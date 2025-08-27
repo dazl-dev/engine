@@ -1,4 +1,4 @@
-import { isDisposable, SetMultiMap } from '@wixc3/patterns';
+import { isDisposable, SetMultiMap } from '@dazl/patterns';
 import { deferred } from 'promise-assist';
 import type { ContextualEnvironment, Environment, EnvironmentMode } from '../entities/env.js';
 import { errorToJson } from '../helpers/index.js';

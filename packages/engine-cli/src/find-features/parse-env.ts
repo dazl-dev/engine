@@ -5,7 +5,7 @@ import {
     type AnyEnvironment,
     type EnvironmentMode,
     type MultiEnvironment,
-} from '@wixc3/engine-core';
+} from '@dazl/engine-core';
 import type { IEnvironmentDescriptor } from '../types.js';
 
 const convertEnvToIEnv = (env: AnyEnvironment): IEnvironmentDescriptor => {

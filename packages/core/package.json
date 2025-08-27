@@ -1,5 +1,5 @@
 {
-  "name": "@wixc3/engine-core",
+  "name": "@dazl/engine-core",
   "version": "51.0.1",
   "type": "module",
   "main": "dist/index.js",
@@ -15,8 +15,8 @@
     "test:browser": "mocha-web \"dist/test/**/*.spec.js\""
   },
   "dependencies": {
-    "@wixc3/isomorphic-worker": "^2.0.0",
-    "@wixc3/patterns": "^18.4.1",
+    "@dazl/isomorphic-worker": "^2.0.0",
+    "@dazl/patterns": "^18.4.1",
     "promise-assist": "^2.0.1",
     "socket.io-client": "^4.8.1"
   },

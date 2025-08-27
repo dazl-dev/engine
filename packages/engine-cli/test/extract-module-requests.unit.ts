@@ -1,4 +1,4 @@
-import { extractModuleRequests } from '@wixc3/engine-cli';
+import { extractModuleRequests } from '@dazl/engine-cli';
 import { expect } from 'chai';
 import ts from 'typescript';
 

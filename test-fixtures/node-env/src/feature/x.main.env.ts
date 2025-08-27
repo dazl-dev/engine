@@ -1,4 +1,4 @@
-import { socketClientInitializer } from '@wixc3/engine-core';
+import { socketClientInitializer } from '@dazl/engine-core';
 import { mainEnv, serverEnv } from './x.feature.js';
 import sampleFeature from './x.feature.js';
 

@@ -5,8 +5,8 @@ import {
     Message,
     MultiCounter,
     socketClientInitializer,
-} from '@wixc3/engine-core';
-import { IDisposable, SetMultiMap } from '@wixc3/patterns';
+} from '@dazl/engine-core';
+import { IDisposable, SetMultiMap } from '@dazl/patterns';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { extname } from 'node:path';

@@ -5,8 +5,8 @@ import type {
     FeatureClass,
     MultiEnvironment,
     TopLevelConfig,
-} from '@wixc3/engine-core';
-import type { PerformanceMetrics } from '@wixc3/engine-runtime-node';
+} from '@dazl/engine-core';
+import type { PerformanceMetrics } from '@dazl/engine-runtime-node';
 import type { BuildOptions } from 'esbuild';
 import type io from 'socket.io';
 

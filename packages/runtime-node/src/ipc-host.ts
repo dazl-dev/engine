@@ -1,6 +1,6 @@
-import { BaseHost, type Message } from '@wixc3/engine-core';
+import { BaseHost, type Message } from '@dazl/engine-core';
 import type { ChildProcess } from 'node:child_process';
-import { SafeDisposable, type IDisposable } from '@wixc3/patterns';
+import { SafeDisposable, type IDisposable } from '@dazl/patterns';
 
 const isParentProcess = (process: NodeJS.Process | ChildProcess): process is NodeJS.Process => {
     return (process as NodeJS.Process).constructor.name === 'process';

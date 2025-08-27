@@ -1,4 +1,4 @@
-/** @type {import('@wixc3/engine-cli').EngineConfig} */
+/** @type {import('@dazl/engine-cli').EngineConfig} */
 export default {
     featureDiscoveryRoot: 'dist',
     buildPlugins: ({ webConfig, nodeConfig }) => {

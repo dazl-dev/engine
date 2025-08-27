@@ -1,8 +1,8 @@
 import type { IFileSystemSync } from '@file-services/types';
-import { concat } from '@wixc3/common';
-import { flattenTree } from '@wixc3/engine-core';
-import type { SetMultiMap } from '@wixc3/patterns';
-import { childPackagesFromContext, resolveDirectoryContext, type INpmPackage } from '@wixc3/resolve-directory-context';
+import { concat } from '@dazl/common';
+import { flattenTree } from '@dazl/engine-core';
+import type { SetMultiMap } from '@dazl/patterns';
+import { childPackagesFromContext, resolveDirectoryContext, type INpmPackage } from '@dazl/resolve-directory-context';
 import { isFeatureFile } from './build-constants.js';
 import type { IConfigDefinition, IFeatureDefinition } from '../types.js';
 import { loadFeaturesFromPaths } from './load-features-from-paths.js';

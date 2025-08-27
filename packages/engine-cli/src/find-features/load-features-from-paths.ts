@@ -1,9 +1,9 @@
 import { pathToFileURL } from 'node:url';
 import type { IFileSystemSync } from '@file-services/types';
-import { concat, getValue, isPlainObject, map } from '@wixc3/common';
-import type { FeatureClass } from '@wixc3/engine-core';
-import { SetMultiMap } from '@wixc3/patterns';
-import type { INpmPackage } from '@wixc3/resolve-directory-context';
+import { concat, getValue, isPlainObject, map } from '@dazl/common';
+import type { FeatureClass } from '@dazl/engine-core';
+import { SetMultiMap } from '@dazl/patterns';
+import type { INpmPackage } from '@dazl/resolve-directory-context';
 import {
     isFeatureFile,
     parseConfigFileName,

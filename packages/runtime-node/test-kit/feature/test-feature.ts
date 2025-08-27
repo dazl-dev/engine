@@ -1,4 +1,4 @@
-import { COM, Feature, Service } from '@wixc3/engine-core';
+import { COM, Feature, Service } from '@dazl/engine-core';
 import { aEnv, bEnv } from './envs.js';
 import { EchoService } from './types.js';
 

@@ -1,4 +1,4 @@
-import { Message, Target } from '@wixc3/engine-core';
+import { Message, Target } from '@dazl/engine-core';
 import { parentPort } from 'node:worker_threads';
 
 export class ParentPortHost implements Target {

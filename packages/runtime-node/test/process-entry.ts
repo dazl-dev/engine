@@ -1,5 +1,5 @@
-import { Communication } from '@wixc3/engine-core';
-import { IPCHost } from '@wixc3/engine-runtime-node';
+import { Communication } from '@dazl/engine-core';
+import { IPCHost } from '@dazl/engine-runtime-node';
 
 const ipcHost = new IPCHost(process);
 const com = new Communication(ipcHost, 'process');

@@ -1,5 +1,5 @@
 import type { LogMessage, LogMetadata } from '../common-types.js';
-import { EventEmitter } from '@wixc3/patterns';
+import { EventEmitter } from '@dazl/patterns';
 import { type LoggerTransport, LogLevel } from '../types.js';
 
 export interface LogValueData {

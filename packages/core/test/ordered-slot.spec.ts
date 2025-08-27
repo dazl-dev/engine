@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { OrderedRegistry } from '@wixc3/engine-core';
+import { OrderedRegistry } from '@dazl/engine-core';
 
 describe('ordered-slot', () => {
     const MENU_FILE = 'File';

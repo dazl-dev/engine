@@ -79,7 +79,7 @@ const config: Config = {
                     ],
                 },
             ],
-            copyright: `Copyright © 2006-${new Date().getFullYear()} Wix.com LTD. Built with Docusaurus.`,
+            copyright: `Copyright © 2006-${new Date().getFullYear()} Dazl LTD. Built with Docusaurus.`,
         },
         prism: {
             theme: themes.github,

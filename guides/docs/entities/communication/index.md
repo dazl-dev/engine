@@ -18,14 +18,14 @@ For communication between two environments to work, they need to establish a com
 Basically, what is needed to be done is to tell the current communication instance how to send messages to the
 communication instance of the other environment.
 
-The `@wixc3/engine-core` package exports [[runtime.entities.communication.initializers]], which are responsible for
+The `@dazl/engine-core` package exports [[runtime.entities.communication.initializers]], which are responsible for
 establishing a connection between engine environments, **when using engineer**
 
 So let's say we have an engine application with two environments declared an exported from the `f1` feature declaration
 file
 
 ```ts
-import { COM } from '@wixc3/engine-core';
+import { COM } from '@dazl/engine-core';
 
 export const browserEnv = new Environment('main', 'window', 'single');
 export const serverEnv = new Environment('server', 'node', 'single');
@@ -43,7 +43,7 @@ In this point, if we use `engineer` cli, we can just use the \_\_ API to establi
 and `server` environments, in the `main` environment setup
 
 ```ts
-import { socketClientInitializer } from '@wixc3/engine-core';
+import { socketClientInitializer } from '@dazl/engine-core';
 import f1, { browserEnv, serverEnv } from './f1.feature';
 
 f1.setup(browserEnv, ({ echoService }, { COM: { communication } }) => {

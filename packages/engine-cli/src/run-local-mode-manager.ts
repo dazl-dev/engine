@@ -1,4 +1,4 @@
-import { type ILaunchHttpServerOptions, NodeEnvManager } from '@wixc3/engine-runtime-node';
+import { type ILaunchHttpServerOptions, NodeEnvManager } from '@dazl/engine-runtime-node';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { FeatureEnvironmentMapping } from './types.js';

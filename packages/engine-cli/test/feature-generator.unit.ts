@@ -1,6 +1,6 @@
 import { createMemoryFs } from '@file-services/memory';
 import { nodeFs as fs } from '@file-services/node';
-import { templateCompilerProvider } from '@wixc3/common';
+import { templateCompilerProvider } from '@dazl/common';
 import { expect } from 'chai';
 import { expectedDirContents, FEATURE_NAME, templatesDirContents } from './mocks/feature-generator.mocks.js';
 import {
@@ -10,7 +10,7 @@ import {
     pathToFeaturesDirectory,
     readDirectoryContentsSync,
     writeDirectoryContentsSync,
-} from '@wixc3/engine-cli/dist/feature-generator';
+} from '@dazl/engine-cli/dist/feature-generator';
 
 describe('Feature Generator', () => {
     it('reads directory contents', () => {

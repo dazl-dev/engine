@@ -1,4 +1,4 @@
-import { iframeInitializer } from '@wixc3/engine-core';
+import { iframeInitializer } from '@dazl/engine-core';
 import ReloadedIframe, { iframeEnv, mainEnv } from './reloaded-iframe.feature.js';
 import { contentId, echoBtnId, refreshBtnId, timesRefreshedId } from '../consts.js';
 

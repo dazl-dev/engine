@@ -1,7 +1,7 @@
-import { AnyEnvironment, Communication, IRunOptions, UniversalWorkerHost } from '@wixc3/engine-core';
-import { Worker } from '@wixc3/isomorphic-worker/worker';
-import { type UniversalWorkerOptions } from '@wixc3/isomorphic-worker/types';
-import { createDisposables } from '@wixc3/patterns';
+import { AnyEnvironment, Communication, IRunOptions, UniversalWorkerHost } from '@dazl/engine-core';
+import { Worker } from '@dazl/isomorphic-worker/worker';
+import { type UniversalWorkerOptions } from '@dazl/isomorphic-worker/types';
+import { createDisposables } from '@dazl/patterns';
 import { getMetricsFromWorker } from './metrics-utils.js';
 import { rpcCall } from './micro-rpc.js';
 import type { RunningNodeEnvironment } from './node-env-manager.js';

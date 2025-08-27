@@ -1,5 +1,5 @@
-import { TopLevelConfig } from '@wixc3/engine-core';
-import { SetMultiMap } from '@wixc3/patterns';
+import { TopLevelConfig } from '@dazl/engine-core';
+import { SetMultiMap } from '@dazl/patterns';
 import type {
     ConfigurationEnvironmentMapping,
     FeatureEnvironmentMapping,

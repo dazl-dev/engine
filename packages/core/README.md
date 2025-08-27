@@ -1,4 +1,4 @@
-# @wixc3/engine-core
+# @dazl/engine-core
 
 Run-time abstractions for creating multi-environment web applications while practicing feature-oriented software development.
 
@@ -30,7 +30,7 @@ For example:
 ```ts
 /* my-feature.feature.ts */
 
-import { Feature } from '@wixc3/engine-core';
+import { Feature } from '@dazl/engine-core';
 
 /* defining a new feature */
 export default new Feature({

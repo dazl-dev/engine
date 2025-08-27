@@ -1,5 +1,5 @@
-import { Worker } from '@wixc3/isomorphic-worker/worker';
-import type { UniversalWorkerOptions } from '@wixc3/isomorphic-worker/types';
+import { Worker } from '@dazl/isomorphic-worker/worker';
+import type { UniversalWorkerOptions } from '@dazl/isomorphic-worker/types';
 import { UniversalWorkerHost } from '../hosts/universal-worker-host.js';
 import type { InitializerOptions } from './types.js';
 

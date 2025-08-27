@@ -1,6 +1,6 @@
 import { createMemoryFs } from '@file-services/memory';
 import { expect } from 'chai';
-import { loadFeatureDirectory } from '@wixc3/engine-cli';
+import { loadFeatureDirectory } from '@dazl/engine-cli';
 
 describe('loadFeatureDirectory', () => {
     it('locates engine entity files for a given directory', () => {

@@ -1,6 +1,6 @@
-import { bindMetricsListener, bindRpcListener, ParentPortHost } from '@wixc3/engine-runtime-node';
+import { bindMetricsListener, bindRpcListener, ParentPortHost } from '@dazl/engine-runtime-node';
 import { workerData } from 'node:worker_threads';
-import { COM, FeatureClass, RuntimeEngine, TopLevelConfig } from '@wixc3/engine-core';
+import { COM, FeatureClass, RuntimeEngine, TopLevelConfig } from '@dazl/engine-core';
 import TestFeature from '../feature/test-feature.js';
 import { aEnv } from '../feature/envs.js';
 import '../feature/test-feature.a.env.js';

@@ -1,4 +1,4 @@
-import { SetMultiMap } from '@wixc3/patterns';
+import { SetMultiMap } from '@dazl/patterns';
 import { createEntryPoints } from './create-entrypoints.js';
 import type {
     FeatureEnvironmentMapping,
@@ -8,7 +8,7 @@ import type {
 } from './types.js';
 import { createAllValidConfigurationsEnvironmentMapping } from './configuration-mapping.js';
 import { getResolvedEnvironments, resolveEnvironments } from './environments.js';
-import type { AnyEnvironment } from '@wixc3/engine-core';
+import type { AnyEnvironment } from '@dazl/engine-core';
 
 export function resolveBuildEntryPoints({
     features,

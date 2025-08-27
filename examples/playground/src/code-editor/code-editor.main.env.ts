@@ -1,4 +1,4 @@
-import { webWorkerInitializer } from '@wixc3/engine-core';
+import { webWorkerInitializer } from '@dazl/engine-core';
 import CodeEditor, { MAIN, PROCESSING } from './code-editor.feature.js';
 import { CodeService } from './code-service.js';
 import { ErrorService } from './error-service.js';

@@ -1,5 +1,5 @@
 import { EQUAL } from 'typescript-type-utils';
-import { EnvType, Entity, Environment, RunningInstance } from '@wixc3/engine-core';
+import { EnvType, Entity, Environment, RunningInstance } from '@dazl/engine-core';
 
 type MAIN1 = Environment<'main', 'node', 'single'>;
 type K = EnvType<[]>;

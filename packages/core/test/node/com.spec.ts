@@ -1,4 +1,4 @@
-import { createDisposables } from '@wixc3/create-disposables';
+import { createDisposables } from '@dazl/create-disposables';
 import {
     BaseHost,
     COM,
@@ -11,7 +11,7 @@ import {
     Slot,
     declareComEmitter,
     multiTenantMethod,
-} from '@wixc3/engine-core';
+} from '@dazl/engine-core';
 import * as chai from 'chai';
 import { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';

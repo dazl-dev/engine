@@ -8,7 +8,7 @@ import {
     type AsyncApi,
     type EnvironmentInstanceToken,
     type MultiEnvAsyncApi,
-} from '@wixc3/engine-core';
+} from '@dazl/engine-core';
 import * as chai from 'chai';
 import { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';

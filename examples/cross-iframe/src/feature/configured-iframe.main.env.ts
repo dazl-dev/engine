@@ -1,4 +1,4 @@
-import { FETCH_OPTIONS_PARAM_NAME, iframeInitializer, installRunOptionsInitMessageHandler } from '@wixc3/engine-core';
+import { FETCH_OPTIONS_PARAM_NAME, iframeInitializer, installRunOptionsInitMessageHandler } from '@dazl/engine-core';
 import { mainEnv, iframeEnv } from './echo.feature.js';
 import fixture from './configured-iframe.feature.js';
 

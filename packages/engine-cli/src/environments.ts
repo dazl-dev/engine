@@ -1,5 +1,5 @@
-import { type AnyEnvironment, type EnvironmentTypes, flattenTree } from '@wixc3/engine-core';
-import { SetMultiMap } from '@wixc3/patterns';
+import { type AnyEnvironment, type EnvironmentTypes, flattenTree } from '@dazl/engine-core';
+import { SetMultiMap } from '@dazl/patterns';
 import type { IEnvironmentDescriptor, IFeatureDefinition, IStaticFeatureDefinition } from './types.js';
 
 export interface GetResolveEnvironmentsParams {

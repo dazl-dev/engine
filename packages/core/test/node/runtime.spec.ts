@@ -20,7 +20,7 @@ import {
     run as runEngine,
     type DisposeFunction,
     type IRunOptions,
-} from '@wixc3/engine-core';
+} from '@dazl/engine-core';
 import * as chai from 'chai';
 import { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
