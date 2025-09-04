@@ -23,9 +23,9 @@
     "prettify": "prettier . --write"
   },
   "devDependencies": {
-    "@dazl/create-disposables": "^18.4.1",
-    "@file-services/memory": "^10.0.1",
-    "@file-services/types": "^10.0.1",
+    "@dazl/create-disposables": "^18.5.0",
+    "@file-services/memory": "^11.0.0",
+    "@file-services/types": "^11.0.0",
     "@playwright/browser-chromium": "^1.55.0",
     "@types/chai": "^5.2.2",
     "@types/chai-as-promised": "^8.0.2",
@@ -39,7 +39,7 @@
     "@types/sinon": "^17.0.4",
     "@types/sinon-chai": "^4.0.0",
     "@types/yargs": "^17.0.33",
-    "@dazl/wait-for-call": "^18.4.1",
+    "@dazl/wait-for-call": "^18.5.0",
     "chai": "^6.0.1",
     "chai-as-promised": "^8.0.2",
     "create-temp-directory": "^2.4.0",
