@@ -1,16 +1,14 @@
+// @ts-check
+
 import pluginJs from '@eslint/js';
 import configPrettier from 'eslint-config-prettier';
 import pluginNoOnlyTests from 'eslint-plugin-no-only-tests';
 import pluginReact from 'eslint-plugin-react';
 import pluginReactHooks from 'eslint-plugin-react-hooks';
+import { defineConfig } from 'eslint/config';
 import pluginTypescript from 'typescript-eslint';
 
-for (const config of pluginTypescript.configs.recommendedTypeChecked) {
-    config.files = ['**/*.{ts,tsx,mts,cts}']; // ensure config only targets TypeScript files
-}
-
-/** @type {import('eslint').Linter.Config[]} */
-export default [
+export default defineConfig([
     { ignores: ['**/dist/', '**/dist-engine/', 'packages/engineer/gui-feature.d.ts'] },
     pluginJs.configs.recommended,
     pluginReact.configs.flat.recommended,
@@ -29,7 +27,10 @@ export default [
             'react-hooks/exhaustive-deps': 'error',
         },
     },
-    ...pluginTypescript.configs.recommendedTypeChecked,
+    ...pluginTypescript.configs.recommendedTypeChecked.map((config) => ({
+        ...config,
+        files: ['**/*.{ts,tsx,mts,cts}'],
+    })),
     { languageOptions: { parserOptions: { projectService: true } } },
     {
         files: ['**/*.{ts,tsx,mts,cts}'],
@@ -48,4 +49,4 @@ export default [
         },
     },
     configPrettier,
-];
+]);
