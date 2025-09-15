@@ -45,7 +45,7 @@ export class RuntimeConfigurations {
         }
         const res = await loader();
         // top level config creates a module that returns a Promise as default export
-        const allLoadedConfigs = await Promise.all(res.map((module) => module.default ?? module));
+        const allLoadedConfigs = res.map((module) => module.default ?? module);
         return allLoadedConfigs.flat();
     }
     /**
