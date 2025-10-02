@@ -48,7 +48,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-no-only-tests": "^3.3.0",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-hooks": "^6.1.0",
     "mocha": "^11.7.3",
     "mocha-web": "^2.4.0",
     "prettier": "^3.6.2",
