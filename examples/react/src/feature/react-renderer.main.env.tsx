@@ -1,5 +1,4 @@
 import reactRendererFeature, { MainEnv } from './react-renderer.feature.js';
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 
 reactRendererFeature.setup(MainEnv, ({}) => {

@@ -12,9 +12,11 @@ export default defineConfig([
     globalIgnores(['**/dist/', '**/dist-engine/', 'packages/engineer/gui-feature.d.ts']),
     pluginJs.configs.recommended,
     pluginReact.configs.flat.recommended,
-    // pluginReact.configs.flat['jsx-runtime'],
+    pluginReact.configs.flat['jsx-runtime'],
+    pluginReactHooks.configs.flat.recommended,
+
     { settings: { react: { version: 'detect' } } },
-    { plugins: { 'react-hooks': pluginReactHooks, 'no-only-tests': pluginNoOnlyTests } },
+    { plugins: { 'no-only-tests': pluginNoOnlyTests } },
     {
         rules: {
             // 'no-console': 'error',
@@ -23,7 +25,6 @@ export default defineConfig([
             'no-undef': 'off',
             'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
             'react/prop-types': 'off',
-            'react-hooks/rules-of-hooks': 'error',
             'react-hooks/exhaustive-deps': 'error',
         },
     },

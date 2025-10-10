@@ -1,6 +1,5 @@
 import reactFeatureFeature from './gui.feature.js';
 import { MainEnv } from './react-renderer.feature.js';
-import React from 'react';
 
 reactFeatureFeature.setup(MainEnv, ({ run, extentionSlot }, { renderer: { renderingService } }) => {
     run(() => {
