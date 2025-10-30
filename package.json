@@ -55,7 +55,7 @@
     "promise-assist": "^2.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "rimraf": "^6.0.1",
+    "rimraf": "^6.1.0",
     "sinon": "^21.0.0",
     "sinon-chai": "^4.0.1",
     "typescript": "~5.9.3",
