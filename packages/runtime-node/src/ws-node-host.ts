@@ -104,11 +104,8 @@ export class WsServerHost extends BaseHost implements IDisposable {
         // Handle reconnection: update socket and clear dispose timer
         const existingClient = this.clients.get(stableClientId);
         if (existingClient) {
-            console.log(`Client reconnected! Stable Client ID: ${stableClientId}`);
-
             // Clear dispose timer if exists
             if (existingClient.disposeTimer) {
-                console.log(`  Clearing dispose timer for client: ${stableClientId}`);
                 clearTimeout(existingClient.disposeTimer);
                 existingClient.disposeTimer = undefined;
             }
@@ -117,7 +114,6 @@ export class WsServerHost extends BaseHost implements IDisposable {
             existingClient.socket.removeAllListeners();
             // Update socket reference
             existingClient.socket = socket;
-            console.log(`✅ Reconnection detected - dispose cancelled for stable client: ${stableClientId}`);
         } else {
             // New connection: create client entry
             this.clients.set(stableClientId, {
