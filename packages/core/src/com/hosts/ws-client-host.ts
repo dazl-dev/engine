@@ -10,7 +10,7 @@ export class WsClientHost extends BaseHost implements IDisposable {
     isDisposed = this.disposables.isDisposed;
     public connected: Promise<void>;
     private socketClient: Socket;
-    public subscribers = new EventEmitter<{ disconnect: void; reconnect: void; connect: void }>();
+    public subscribers = new EventEmitter<{ disconnect: string; reconnect: void; connect: void }>();
     private stableClientId = globalThis.crypto.randomUUID();
 
     constructor(url: string, options?: Partial<SocketOptions>) {
@@ -47,8 +47,8 @@ export class WsClientHost extends BaseHost implements IDisposable {
             this.emitMessageHandlers(data as Message);
         });
 
-        this.socketClient.on('disconnect', () => {
-            this.subscribers.emit('disconnect', undefined);
+        this.socketClient.on('disconnect', (reason: string) => {
+            this.subscribers.emit('disconnect', reason);
         });
 
         this.socketClient.on('reconnect', () => {

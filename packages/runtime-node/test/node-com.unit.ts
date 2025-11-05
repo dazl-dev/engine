@@ -238,6 +238,7 @@ describe('Socket communication', () => {
         await waitFor(
             () => {
                 expect(spy.callCount).to.be.eq(1);
+                expect(spy.firstCall.args[0]).to.be.a('string');
             },
             {
                 timeout: 2_000,
@@ -387,7 +388,6 @@ describe('IPC communication', () => {
         const mainHost = new BaseHost();
         const communication = new Communication(mainHost, 'main');
         const forked = fork(new URL('./process-entry.js', import.meta.url));
-        disposables.add(() => forked.kill());
         const host = new IPCHost(forked);
         communication.registerEnv('process', host);
         communication.registerMessageHandler(host);
@@ -399,6 +399,9 @@ describe('IPC communication', () => {
         );
 
         expect(await proxy.echo()).to.eq('yo');
+
+        // Clean up after the test completes
+        forked.kill();
     });
 
     it('handles forked process closing', async () => {
