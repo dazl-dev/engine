@@ -10,7 +10,8 @@ export class WsClientHost extends BaseHost implements IDisposable {
     isDisposed = this.disposables.isDisposed;
     public connected: Promise<void>;
     private socketClient: Socket;
-    public subscribers = new EventEmitter<{ disconnect: void; reconnect: void }>();
+    public subscribers = new EventEmitter<{ disconnect: void; reconnect: void; connect: void }>();
+    private stableClientId = globalThis.crypto.randomUUID();
 
     constructor(url: string, options?: Partial<SocketOptions>) {
         super();
@@ -24,10 +25,12 @@ export class WsClientHost extends BaseHost implements IDisposable {
 
         this.socketClient = io(url, {
             transports: ['websocket'],
-            forceNew: true,
             withCredentials: true, // Pass Cookie to socket io connection
             path,
             query,
+            auth: {
+                clientId: this.stableClientId,
+            },
             ...options,
         });
 
@@ -36,15 +39,16 @@ export class WsClientHost extends BaseHost implements IDisposable {
         });
 
         this.socketClient.on('connect', () => {
-            this.socketClient.on('message', (data: unknown) => {
-                this.emitMessageHandlers(data as Message);
-            });
+            this.subscribers.emit('connect', undefined);
             resolve();
+        });
+
+        this.socketClient.on('message', (data: unknown) => {
+            this.emitMessageHandlers(data as Message);
         });
 
         this.socketClient.on('disconnect', () => {
             this.subscribers.emit('disconnect', undefined);
-            this.socketClient.close();
         });
 
         this.socketClient.on('reconnect', () => {
@@ -56,5 +60,19 @@ export class WsClientHost extends BaseHost implements IDisposable {
 
     public postMessage(data: any) {
         this.socketClient.emit('message', data);
+    }
+
+    disconnectSocket() {
+        if (this.socketClient.connected) {
+            this.socketClient.disconnect();
+        }
+    }
+    reconnectSocket() {
+        if (!this.socketClient.connected) {
+            this.socketClient.connect();
+        }
+    }
+    isConnected(): boolean {
+        return this.socketClient.connected;
     }
 }
