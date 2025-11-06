@@ -36,7 +36,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
         config: { disposeDelayMs?: number } = {},
     ) {
         super();
-        this.disposeDelayMs = config.disposeDelayMs ?? 120000; // 2 minutes default
+        this.disposeDelayMs = config.disposeDelayMs ?? 120_000;
         this.server.on('connection', this.onConnection);
         this.disposables.add('connection', () => this.server.off('connection', this.onConnection));
         this.disposables.add('clear handlers', () => this.handlers.clear());
