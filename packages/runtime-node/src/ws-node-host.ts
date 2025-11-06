@@ -15,11 +15,11 @@ export class WsHost extends BaseHost {
 }
 
 type EnvId = string;
-type StableId = string;
+type ClientId = string;
 
 export class WsServerHost extends BaseHost implements IDisposable {
     private clients = new Map<
-        StableId,
+        ClientId,
         {
             socket: io.Socket;
             namespacedEnvIds: Set<EnvId>;
