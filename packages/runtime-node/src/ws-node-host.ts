@@ -29,14 +29,14 @@ export class WsServerHost extends BaseHost implements IDisposable {
     private disposables = new SafeDisposable(WsServerHost.name);
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
-    private disposeDelayMs: number;
+    private disposeGraceMs: number;
 
     constructor(
         private server: io.Server | io.Namespace,
-        config: { disposeDelayMs?: number } = {},
+        config: { disposeGraceMs?: number } = {},
     ) {
         super();
-        this.disposeDelayMs = config.disposeDelayMs ?? 120_000;
+        this.disposeGraceMs = config.disposeGraceMs ?? 120_000;
         this.server.on('connection', this.onConnection);
         this.disposables.add('connection', () => this.server.off('connection', this.onConnection));
         this.disposables.add('clear handlers', () => this.handlers.clear());
@@ -150,7 +150,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
                 this.clients.delete(clientId);
                 this.emitDisposeMessagesForClient(clientToDispose.namespacedEnvIds);
-            }, this.disposeDelayMs);
+            }, this.disposeGraceMs);
         });
     };
 }

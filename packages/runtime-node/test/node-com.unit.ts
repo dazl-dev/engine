@@ -24,7 +24,7 @@ interface ICommunicationTestApi {
 }
 
 describe('Socket communication', () => {
-    const disposeDelayMs = 10;
+    const disposeGraceMs = 10;
     let clientHost: WsClientHost;
     let serverHost: WsServerHost;
     let socketServer: io.Server;
@@ -58,7 +58,7 @@ describe('Socket communication', () => {
 
         clientHost = new WsClientHost(serverTopology['server-host']);
         disposables.add(() => clientHost.dispose());
-        serverHost = new WsServerHost(nameSpace, { disposeDelayMs });
+        serverHost = new WsServerHost(nameSpace, { disposeGraceMs });
         disposables.add(() => serverHost.dispose());
         await clientHost.connected;
     });
@@ -326,7 +326,7 @@ describe('Socket communication', () => {
         await waitForConnect(() => true);
 
         // Wait a bit more than the dispose delay to ensure dispose timer would have fired
-        await sleep(disposeDelayMs * 2);
+        await sleep(disposeGraceMs * 2);
 
         // Verify no dispose message was sent (since reconnection cancelled it)
         expect(disposeSpy.callCount).to.eql(0);
