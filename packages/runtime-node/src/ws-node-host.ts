@@ -58,8 +58,8 @@ export class WsServerHost extends BaseHost implements IDisposable {
             return null;
         }
         return {
-            stableClientId: namespacedId.substring(0, slashIndex),
-            envId: namespacedId.substring(slashIndex + 1),
+            stableClientId: namespacedId.slice(0, slashIndex),
+            envId: namespacedId.slice(slashIndex + 1),
         };
     }
 
