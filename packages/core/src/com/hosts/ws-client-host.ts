@@ -11,7 +11,7 @@ export class WsClientHost extends BaseHost implements IDisposable {
     public connected: Promise<void>;
     private socketClient: Socket;
     public subscribers = new EventEmitter<{ disconnect: string; reconnect: void; connect: void }>();
-    private stableClientId = globalThis.crypto.randomUUID();
+    private stableClientId = crypto.randomUUID();
 
     constructor(url: string, options?: Partial<SocketOptions>) {
         super();
