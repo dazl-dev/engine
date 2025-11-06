@@ -52,10 +52,10 @@ export class WsServerHost extends BaseHost implements IDisposable {
         });
     }
 
-    private extractClientIdAndEnvId(namespacedId: string): { stableClientId: string; envId: string } | null {
+    private extractClientIdAndEnvId(namespacedId: string): { stableClientId: string; envId: string } | undefined {
         const slashIndex = namespacedId.indexOf('/');
         if (slashIndex === -1) {
-            return null;
+            return undefined;
         }
         return {
             stableClientId: namespacedId.slice(0, slashIndex),
