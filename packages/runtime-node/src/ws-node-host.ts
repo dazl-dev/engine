@@ -14,7 +14,7 @@ export class WsHost extends BaseHost {
     }
 }
 
-type EnvId = string;
+type ClientEnvId = string;
 type ClientId = string;
 
 export class WsServerHost extends BaseHost implements IDisposable {
@@ -22,7 +22,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
         ClientId,
         {
             socket: io.Socket;
-            namespacedEnvIds: Set<EnvId>;
+            namespacedEnvIds: Set<ClientEnvId>;
             disposeTimer?: NodeJS.Timeout;
         }
     >();
@@ -63,7 +63,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
         };
     }
 
-    private emitDisposeMessagesForClient(namespacedEnvIds: Set<EnvId>): void {
+    private emitDisposeMessagesForClient(namespacedEnvIds: Set<ClientEnvId>): void {
         for (const envId of namespacedEnvIds) {
             this.emitMessageHandlers({
                 type: 'dispose',
