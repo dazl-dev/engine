@@ -95,7 +95,11 @@ export class WsServerHost extends BaseHost implements IDisposable {
     }
 
     private onConnection = (socket: io.Socket): void => {
-        const clientId = socket.handshake.auth?.clientId ?? socket.id;
+        const clientId = socket.handshake.auth?.clientId;
+        if (!clientId) {
+            socket.disconnect(true);
+            return;
+        }
 
         // Handle reconnection: update socket and clear dispose timer
         const existingClient = this.clients.get(clientId);
