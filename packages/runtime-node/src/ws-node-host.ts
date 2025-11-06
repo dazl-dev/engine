@@ -95,14 +95,14 @@ export class WsServerHost extends BaseHost implements IDisposable {
     }
 
     private onConnection = (socket: io.Socket): void => {
-        const stableClientId = socket.handshake.auth?.clientId as string | undefined;
+        const clientId = socket.handshake.auth?.clientId as string | undefined;
 
-        if (!stableClientId) {
-            throw new Error('Client must provide a stable client ID in socket.handshake.auth.clientId');
+        if (!clientId) {
+            throw new Error('Client must provide a client ID in socket.handshake.auth.clientId');
         }
 
         // Handle reconnection: update socket and clear dispose timer
-        const existingClient = this.clients.get(stableClientId);
+        const existingClient = this.clients.get(clientId);
         if (existingClient) {
             // Clear dispose timer if exists
             if (existingClient.disposeTimer) {
@@ -116,18 +116,18 @@ export class WsServerHost extends BaseHost implements IDisposable {
             existingClient.socket = socket;
         } else {
             // New connection: create client entry
-            this.clients.set(stableClientId, {
+            this.clients.set(clientId, {
                 socket,
                 namespacedEnvIds: new Set(),
             });
         }
 
         const onMessage = (message: Message): void => {
-            const client = this.clients.get(stableClientId);
+            const client = this.clients.get(clientId);
             if (!client) return;
             // Namespace the env IDs with stableClientId to differentiate between clients
-            const namespacedFrom = `${stableClientId}/${message.from}`;
-            const namespacedOrigin = `${stableClientId}/${message.origin}`;
+            const namespacedFrom = `${clientId}/${message.from}`;
+            const namespacedOrigin = `${clientId}/${message.origin}`;
 
             // Track namespaced env IDs for this client
             client.namespacedEnvIds.add(namespacedFrom);
@@ -144,15 +144,15 @@ export class WsServerHost extends BaseHost implements IDisposable {
         socket.once('disconnect', () => {
             socket.off('message', onMessage);
 
-            const client = this.clients.get(stableClientId);
+            const client = this.clients.get(clientId);
             if (!client) return;
 
             // Delay dispose to allow for socket recovery
             client.disposeTimer = setTimeout(() => {
-                const clientToDispose = this.clients.get(stableClientId);
+                const clientToDispose = this.clients.get(clientId);
                 if (!clientToDispose) return;
 
-                this.clients.delete(stableClientId);
+                this.clients.delete(clientId);
                 this.emitDisposeMessagesForClient(clientToDispose.namespacedEnvIds);
             }, this.disposeDelayMs);
         });
