@@ -56,7 +56,9 @@ describe('Socket communication', () => {
         });
 
         clientHost = new WsClientHost(serverTopology['server-host']);
+        disposables.add(() => clientHost.dispose());
         serverHost = new WsServerHost(nameSpace, { disposeDelayMs: 10 }); // 10ms remove disconnected clients for test speed
+        disposables.add(() => serverHost.dispose());
         await clientHost.connected;
     });
 
@@ -225,14 +227,14 @@ describe('Socket communication', () => {
     it('notifies if environment is disconnected', async () => {
         const spy = sinon.spy();
         const clientCom = new Communication(clientHost, 'client-host', serverTopology);
-        const { id } = await socketClientInitializer({
+        const socketClient = await socketClientInitializer({
             communication: clientCom,
             env: new Environment('server-host', 'node', 'single'),
         });
+        disposables.add(() => socketClient.dispose());
+        expect(socketClient.id).to.not.eq(undefined);
 
-        expect(id).to.not.eq(undefined);
-
-        const host = clientCom.getEnvironmentHost(id);
+        const host = clientCom.getEnvironmentHost(socketClient.id);
         (host as WsClientHost).subscribers.on('disconnect', spy);
         await socketServer.close();
         await waitFor(
@@ -252,22 +254,26 @@ describe('Socket communication', () => {
         const { waitForCall: waitForClient1Call, spy: spyClient1 } =
             createWaitForCall<(ev: { data: Message }) => void>('client');
         const clientHost1 = new WsClientHost(serverTopology['server-host']!);
+        disposables.add(() => clientHost1.dispose());
         const clientHost2 = new WsClientHost(serverTopology['server-host']!);
+
         const clientCom1 = new Communication(clientHost1, 'client-host1', serverTopology);
         const clientCom2 = new Communication(clientHost2, 'client-host2', serverTopology);
         new Communication(serverHost, 'server-host');
-        await socketClientInitializer({
+        const socketClient1 = await socketClientInitializer({
             communication: clientCom1,
             env: {
                 env: 'server-host',
             },
         });
-        await socketClientInitializer({
+        disposables.add(() => socketClient1.dispose());
+        const socketClient2 = await socketClientInitializer({
             communication: clientCom2,
             env: {
                 env: 'server-host',
             },
         });
+        disposables.add(() => socketClient2.dispose());
         clientCom1.registerEnv('client-host2', clientCom1.getEnvironmentHost('server-host')!);
         serverHost.addEventListener('message', spyServer);
         clientHost1.addEventListener('message', spyClient1);

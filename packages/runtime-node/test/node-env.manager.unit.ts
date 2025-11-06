@@ -12,6 +12,14 @@ import { runEnv as runAEnv } from '../test-kit/entrypoints/a.node.js';
 import testFeature from '../test-kit/feature/test-feature.js';
 
 describe('NodeEnvManager', () => {
+    const disposables = new Set<() => Promise<void> | void>();
+    afterEach(async () => {
+        for (const dispose of Array.from(disposables).reverse()) {
+            await dispose();
+        }
+        disposables.clear();
+    });
+
     const meta = { url: import.meta.resolve('../test-kit/entrypoints/') };
     const testCommunicationId = 'test';
 
@@ -39,14 +47,11 @@ describe('NodeEnvManager', () => {
             };
 
             manager = new NodeEnvManager(meta, featureEnvironmentsMapping);
+            disposables.add(() => manager.dispose());
             const { port } = await manager.autoLaunch(new Map([['feature', 'test-feature']]));
             nodeEnvsPort = port;
             communication = getClientCom(port);
-        });
-
-        afterEach(async () => {
-            await communication.dispose();
-            await manager.dispose();
+            disposables.add(() => communication.dispose());
         });
 
         it('should reach env "a"', async () => {
@@ -68,7 +73,9 @@ describe('NodeEnvManager', () => {
         it('should handle two communication with the same', async () => {
             // setup new com instance with the same id
             const communication2 = new Communication(new BaseHost(), testCommunicationId);
+            disposables.add(() => communication2.dispose());
             const host = new WsClientHost('http://localhost:' + nodeEnvsPort, {});
+            disposables.add(() => host.dispose());
 
             communication2.registerEnv(aEnv.env, host);
             communication2.registerEnv(bEnv.env, host);
@@ -85,20 +92,21 @@ describe('NodeEnvManager', () => {
     });
 
     describe('NodeEnvManager with 2 node envs, one remote the other in a worker thread', () => {
-        let closeEnvA: () => Promise<void>;
         let nodeEnvsManager: NodeEnvManager;
         let communication: Communication;
 
         beforeEach(async () => {
             const { port: aPort, socketServer, close } = await launchEngineHttpServer();
-            closeEnvA = close;
+            disposables.add(() => close());
 
+            const wsServerHost = new WsServerHost(socketServer);
+            disposables.add(() => wsServerHost.dispose());
             await runAEnv({
                 Feature: testFeature,
                 topLevelConfig: [
                     COM.configure({
                         config: {
-                            host: new WsServerHost(socketServer),
+                            host: wsServerHost,
                             id: aEnv.env,
                         },
                     }),
@@ -125,13 +133,10 @@ describe('NodeEnvManager', () => {
             };
 
             nodeEnvsManager = new NodeEnvManager(meta, featureEnvironmentsMapping);
+            disposables.add(() => nodeEnvsManager.dispose());
             const { port } = await nodeEnvsManager.autoLaunch(new Map([['feature', 'test-feature']]));
             communication = getClientCom(port);
-        });
-        afterEach(async () => {
-            await communication.dispose();
-            await closeEnvA();
-            await nodeEnvsManager.dispose();
+            disposables.add(() => communication.dispose());
         });
 
         it('should reach env "a"', async () => {
