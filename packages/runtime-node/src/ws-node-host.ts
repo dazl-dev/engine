@@ -17,13 +17,18 @@ export class WsHost extends BaseHost {
 type ClientEnvId = string;
 type ClientId = string;
 
+export interface WsNodeOptions {
+    disposeGraceMs?: number;
+}
+
 export class WsServerHost extends BaseHost implements IDisposable {
     private clients = new Map<
         ClientId,
         {
-            socket: io.Socket;
+            socket?: io.Socket;
             namespacedEnvIds: Set<ClientEnvId>;
             disposeTimer?: NodeJS.Timeout;
+            disposed: boolean;
         }
     >();
     private disposables = new SafeDisposable(WsServerHost.name);
@@ -33,7 +38,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
     constructor(
         private server: io.Server | io.Namespace,
-        config: { disposeGraceMs?: number } = {},
+        config: WsNodeOptions = {},
     ) {
         super();
         this.disposeGraceMs = config.disposeGraceMs ?? 120_000;
@@ -63,6 +68,18 @@ export class WsServerHost extends BaseHost implements IDisposable {
         };
     }
 
+    private emitConnectionDisruptedMessagesForClient(namespacedEnvIds: Set<ClientEnvId>): void {
+        for (const envId of namespacedEnvIds) {
+            this.emitMessageHandlers({
+                type: 'connection_disrupted',
+                from: envId,
+                origin: envId,
+                to: '*',
+                forwardingChain: [],
+            });
+        }
+    }
+
     private emitDisposeMessagesForClient(namespacedEnvIds: Set<ClientEnvId>): void {
         for (const envId of namespacedEnvIds) {
             this.emitMessageHandlers({
@@ -83,7 +100,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
                 if (client) {
                     data.to = parsed.envId;
-                    client.socket.emit('message', data);
+                    client.socket?.emit('message', data);
                     return;
                 }
             }
@@ -110,21 +127,35 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 existingClient.disposeTimer = undefined;
             }
 
-            // remove old socket listeners
-            existingClient.socket.removeAllListeners();
-            // Update socket reference
             existingClient.socket = socket;
-        } else {
+
+            if (existingClient.disposed) {
+                socket.send('server-lost-client-state');
+                existingClient.disposed = false;
+            } else {
+                socket.send('server-connection-restored');
+                existingClient.namespacedEnvIds.forEach((envId) => {
+                    this.emitMessageHandlers({
+                        type: 'ready',
+                        from: envId,
+                        origin: envId,
+                        to: '*',
+                        forwardingChain: [],
+                    });
+                });
+            }
+        } else if (!existingClient) {
             // New connection: create client entry
             this.clients.set(clientId, {
                 socket,
                 namespacedEnvIds: new Set(),
+                disposed: false,
             });
         }
 
         const onMessage = (message: Message): void => {
             const client = this.clients.get(clientId);
-            if (!client) return;
+            if (!client || client.disposed) return;
             // Namespace the env IDs with stableClientId to differentiate between clients
             const namespacedFrom = `${clientId}/${message.from}`;
             const namespacedOrigin = `${clientId}/${message.origin}`;
@@ -147,12 +178,18 @@ export class WsServerHost extends BaseHost implements IDisposable {
             const client = this.clients.get(clientId);
             if (!client) return;
 
+            // set client as pending so that messages are queued for it
+            this.emitConnectionDisruptedMessagesForClient(client.namespacedEnvIds);
+
             // Delay dispose to allow for socket recovery
             client.disposeTimer = setTimeout(() => {
                 const clientToDispose = this.clients.get(clientId);
                 if (!clientToDispose) return;
 
-                this.clients.delete(clientId);
+                clientToDispose.disposed = true;
+                clientToDispose.socket?.removeAllListeners();
+                clientToDispose.socket = undefined;
+
                 this.emitDisposeMessagesForClient(clientToDispose.namespacedEnvIds);
             }, this.disposeGraceMs);
         });

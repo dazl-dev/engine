@@ -10,7 +10,7 @@ import { IDisposable, SetMultiMap } from '@dazl/patterns';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { extname } from 'node:path';
-import { WsServerHost } from './ws-node-host.js';
+import { WsNodeOptions, WsServerHost } from './ws-node-host.js';
 import { ILaunchHttpServerOptions, launchEngineHttpServer } from './launch-http-server.js';
 import { workerThreadInitializer2 } from './worker-thread-initializer2.js';
 import { bindMetricsListener, type PerformanceMetrics } from './metrics-utils.js';
@@ -50,6 +50,7 @@ export class NodeEnvManager implements IDisposable {
     public async autoLaunch(
         runtimeOptions: Map<string, string | boolean | undefined>,
         serverOptions: ILaunchHttpServerOptions = {},
+        hostOptions: WsNodeOptions = {},
     ) {
         process.env.ENGINE_FLOW_V2_DIST_URL = this.importMeta.url;
         const disposeMetricsListener = bindMetricsListener(() => this.collectMetricsFromAllOpenEnvironments());
@@ -59,7 +60,7 @@ export class NodeEnvManager implements IDisposable {
         const { port, socketServer, app, close } = await launchEngineHttpServer({ staticDirPath, ...serverOptions });
         runtimeOptions.set('enginePort', port.toString());
 
-        const clientsHost = new WsServerHost(socketServer);
+        const clientsHost = new WsServerHost(socketServer, hostOptions);
         clientsHost.addEventListener('message', handleRegistrationOnMessage);
         const forwardingCom = new Communication(clientsHost, 'clients-host-com');
         function handleRegistrationOnMessage({ data }: { data: Message }) {
