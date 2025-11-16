@@ -17,6 +17,10 @@ export class WsHost extends BaseHost {
 type ClientEnvId = string;
 type ClientId = string;
 
+export interface WsNodeOptions {
+    disposeGraceMs?: number;
+}
+
 export class WsServerHost extends BaseHost implements IDisposable {
     private clients = new Map<
         ClientId,
@@ -34,7 +38,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
     constructor(
         private server: io.Server | io.Namespace,
-        config: { disposeGraceMs?: number } = {},
+        config: WsNodeOptions = {},
     ) {
         super();
         this.disposeGraceMs = config.disposeGraceMs ?? 120_000;
