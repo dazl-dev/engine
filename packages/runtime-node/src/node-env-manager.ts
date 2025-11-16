@@ -50,6 +50,7 @@ export class NodeEnvManager implements IDisposable {
     public async autoLaunch(
         runtimeOptions: Map<string, string | boolean | undefined>,
         serverOptions: ILaunchHttpServerOptions = {},
+        hostOptions: { disposeGraceMs?: number } = {},
     ) {
         process.env.ENGINE_FLOW_V2_DIST_URL = this.importMeta.url;
         const disposeMetricsListener = bindMetricsListener(() => this.collectMetricsFromAllOpenEnvironments());
@@ -59,7 +60,7 @@ export class NodeEnvManager implements IDisposable {
         const { port, socketServer, app, close } = await launchEngineHttpServer({ staticDirPath, ...serverOptions });
         runtimeOptions.set('enginePort', port.toString());
 
-        const clientsHost = new WsServerHost(socketServer);
+        const clientsHost = new WsServerHost(socketServer, hostOptions);
         clientsHost.addEventListener('message', handleRegistrationOnMessage);
         const forwardingCom = new Communication(clientsHost, 'clients-host-com');
         function handleRegistrationOnMessage({ data }: { data: Message }) {

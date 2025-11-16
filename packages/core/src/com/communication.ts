@@ -349,6 +349,9 @@ export class Communication {
             case 'ready':
                 this.handleReady(message);
                 break;
+            case 'connection_disrupted':
+                this.registerPendingEnvironment(message.origin);
+                break;
             case 'dispose':
                 if (message.from !== this.rootEnvId) {
                     this.clearEnvironment(message.origin, message.from);

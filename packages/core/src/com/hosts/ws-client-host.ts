@@ -10,7 +10,13 @@ export class WsClientHost extends BaseHost implements IDisposable {
     isDisposed = this.disposables.isDisposed;
     public connected: Promise<void>;
     private socketClient: Socket;
-    public subscribers = new EventEmitter<{ disconnect: string; reconnect: void; connect: void }>();
+    public subscribers = new EventEmitter<{
+        disconnect: string;
+        reconnect: void;
+        connect: void;
+        'server-lost-client-state': void;
+        'server-connection-restored': void;
+    }>();
     private stableClientId = crypto.randomUUID();
 
     constructor(url: string, options?: Partial<SocketOptions>) {
@@ -28,9 +34,14 @@ export class WsClientHost extends BaseHost implements IDisposable {
             withCredentials: true, // Pass Cookie to socket io connection
             path,
             query,
+            forceNew: true,
             auth: {
                 clientId: this.stableClientId,
             },
+            randomizationFactor: 0.1,
+            reconnectionDelay: 100,
+            reconnectionDelayMax: 1000,
+            timeout: 3000, // Connection attempt timeout
             ...options,
         });
 
@@ -44,6 +55,13 @@ export class WsClientHost extends BaseHost implements IDisposable {
         });
 
         this.socketClient.on('message', (data: unknown) => {
+            if (
+                typeof data === 'string' &&
+                (data === 'server-lost-client-state' || data === 'server-connection-restored')
+            ) {
+                this.subscribers.emit(data, undefined);
+                return;
+            }
             this.emitMessageHandlers(data as Message);
         });
 
@@ -61,7 +79,9 @@ export class WsClientHost extends BaseHost implements IDisposable {
     public postMessage(data: any) {
         this.socketClient.emit('message', data);
     }
-
+    close() {
+        this.socketClient.close();
+    }
     disconnectSocket() {
         if (this.socketClient.connected) {
             this.socketClient.disconnect();
