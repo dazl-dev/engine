@@ -25,7 +25,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
     private clients = new Map<
         ClientId,
         {
-            socket: io.Socket;
+            socket?: io.Socket;
             namespacedEnvIds: Set<ClientEnvId>;
             disposeTimer?: NodeJS.Timeout;
             disposed: boolean;
@@ -100,7 +100,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
                 if (client) {
                     data.to = parsed.envId;
-                    client.socket.emit('message', data);
+                    client.socket?.emit('message', data);
                     return;
                 }
             }
@@ -127,9 +127,6 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 existingClient.disposeTimer = undefined;
             }
 
-            // remove old socket listeners
-            existingClient.socket.removeAllListeners();
-            // Update socket reference
             existingClient.socket = socket;
 
             if (existingClient.disposed) {
@@ -190,6 +187,9 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 if (!clientToDispose) return;
 
                 clientToDispose.disposed = true;
+                clientToDispose.socket?.removeAllListeners();
+                clientToDispose.socket = undefined;
+
                 this.emitDisposeMessagesForClient(clientToDispose.namespacedEnvIds);
             }, this.disposeGraceMs);
         });
