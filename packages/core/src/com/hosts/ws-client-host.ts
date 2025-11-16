@@ -1,4 +1,4 @@
-import { io, Socket, type SocketOptions } from 'socket.io-client';
+import { io, ManagerOptions, Socket, type SocketOptions } from 'socket.io-client';
 import type { Message } from '../message-types.js';
 import { BaseHost } from './base-host.js';
 import { EventEmitter, IDisposable, SafeDisposable } from '@dazl/patterns';
@@ -19,7 +19,7 @@ export class WsClientHost extends BaseHost implements IDisposable {
     }>();
     private stableClientId = crypto.randomUUID();
 
-    constructor(url: string, options?: Partial<SocketOptions>) {
+    constructor(url: string, options?: Partial<ManagerOptions & SocketOptions>) {
         super();
         this.disposables.add('close socket', () => this.socketClient.close());
         this.disposables.add('clear subscribers', () => this.subscribers.clear());
@@ -38,10 +38,6 @@ export class WsClientHost extends BaseHost implements IDisposable {
             auth: {
                 clientId: this.stableClientId,
             },
-            randomizationFactor: 0.1,
-            reconnectionDelay: 100,
-            reconnectionDelayMax: 1000,
-            timeout: 3000, // Connection attempt timeout
             ...options,
         });
 
