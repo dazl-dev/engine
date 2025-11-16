@@ -2,14 +2,15 @@ import { io, ManagerOptions, Socket, type SocketOptions } from 'socket.io-client
 import type { Message } from '../message-types.js';
 import { BaseHost } from './base-host.js';
 import { EventEmitter, IDisposable, SafeDisposable } from '@dazl/patterns';
-import { deferred } from 'promise-assist';
+import { deferred, type PromiseRejectCb, type PromiseResolveCb } from 'promise-assist';
 
 export class WsClientHost extends BaseHost implements IDisposable {
+    private reinitCount = 0;
     private disposables = new SafeDisposable(WsClientHost.name);
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
     public connected: Promise<void>;
-    private socketClient: Socket;
+    private socketClient!: Socket;
     public subscribers = new EventEmitter<{
         disconnect: string;
         reconnect: void;
@@ -29,6 +30,17 @@ export class WsClientHost extends BaseHost implements IDisposable {
         const { promise, resolve, reject } = deferred();
         this.connected = promise;
 
+        this.initSocketIO(url, path, query, options, reject, resolve);
+    }
+
+    private initSocketIO(
+        url: string,
+        path: string | undefined,
+        query: { [k: string]: string },
+        options: Partial<ManagerOptions & SocketOptions> | undefined,
+        reject: PromiseRejectCb,
+        resolve: PromiseResolveCb<void>,
+    ) {
         this.socketClient = io(url, {
             transports: ['websocket'],
             withCredentials: true, // Pass Cookie to socket io connection
@@ -42,10 +54,27 @@ export class WsClientHost extends BaseHost implements IDisposable {
         });
 
         this.socketClient.once('connect_error', (error) => {
+            if (error.message === 'timeout' && this.reinitCount < 3) {
+                this.reinitCount++;
+                this.socketClient.close();
+                this.initSocketIO(
+                    url,
+                    path,
+                    query,
+                    {
+                        ...options,
+                        timeout: (options?.timeout ?? 20000) * (this.reinitCount + 1),
+                    },
+                    reject,
+                    resolve,
+                );
+                return;
+            }
             reject(new Error(`Failed to connect to socket server`, { cause: error }));
         });
 
         this.socketClient.on('connect', () => {
+            this.reinitCount = Infinity;
             this.subscribers.emit('connect', undefined);
             resolve();
         });
