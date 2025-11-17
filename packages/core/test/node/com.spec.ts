@@ -11,8 +11,8 @@ import {
     Slot,
     declareComEmitter,
     multiTenantMethod,
+    ValueSignal,
 } from '@dazl/engine-core';
-import { Signal } from '@dazl/patterns';
 import * as chai from 'chai';
 import { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
@@ -57,7 +57,7 @@ describe('Communication', () => {
 
     it('signal support', async () => {
         class EchoServiceWithSignal {
-            onChange = new Signal<string>();
+            onChange = new ValueSignal<string>('');
             echo(s: string) {
                 return s;
             }
@@ -69,25 +69,28 @@ describe('Communication', () => {
 
         const proxy = main.apiProxy<EchoServiceWithSignal>(Promise.resolve({ id: 'main' }), { id: 'echoService' });
         const out: string[] = [];
+        const versions: number[] = [];
 
-        const handler = (e: string) => {
+        const handler = (e: string, version: number) => {
             out.push(e);
+            versions.push(version);
         };
         proxy.onChange.subscribe(handler);
 
         // this code simulate cross environment communication it cannot be synchronous
         await sleep(0);
-        echoService.onChange.notify('test');
+        echoService.onChange.setValueAndNotify('test');
         //////////////////////////////////////////////////////////////////////////////
 
         proxy.onChange.unsubscribe(handler);
 
         // this code simulate cross environment communication it cannot be synchronous
         await sleep(0);
-        echoService.onChange.notify('test 2');
+        echoService.onChange.setValueAndNotify('test 2');
         await sleep(0);
         //////////////////////////////////////////////////////////////////////////////
 
+        expect(versions).to.eql([1]);
         expect(out).to.eql(['test']);
     });
 

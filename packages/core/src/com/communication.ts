@@ -1,4 +1,4 @@
-import { isDisposable, SetMultiMap, Signal } from '@dazl/patterns';
+import { isDisposable, SetMultiMap } from '@dazl/patterns';
 import { deferred } from 'promise-assist';
 import type { ContextualEnvironment, Environment, EnvironmentMode } from '../entities/env.js';
 import { errorToJson } from '../helpers/index.js';
@@ -56,6 +56,7 @@ import {
     UnConfiguredMethodError,
     UnknownCallbackIdError,
 } from './communication-errors.js';
+import { ValueSignal } from '../value-signal.js';
 
 export interface ConfigEnvironmentRecord extends EnvironmentRecord {
     registerMessageHandler?: boolean;
@@ -250,6 +251,16 @@ export class Communication {
                                 api,
                                 unsubSignalId,
                                 [fn],
+                                this.rootEnvId,
+                                serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                            );
+                        };
+                        runtimeValue.getValue = async () => {
+                            return this.callMethod(
+                                (await instanceToken).id,
+                                api,
+                                key + '.getValue',
+                                [],
                                 this.rootEnvId,
                                 serviceComConfig as Record<string, AnyServiceMethodOptions>,
                             );
@@ -674,9 +685,10 @@ export class Communication {
             return (this.apisOverrides[api][method] as UnknownFunction)(...[origin, ...args]);
         }
         if (method.includes('.')) {
-            const [apiName, methodName] = method.split('.') as [string, 'subscribe' | 'unsubscribe'];
-            const signal = this.apis[api]![apiName] as Signal<any>;
-            return signal[methodName](args[0] as UnknownFunction);
+            const [apiName, methodName] = method.split('.') as [string, 'subscribe' | 'unsubscribe' | 'getValue'];
+            const signal = this.apis[api]![apiName] as ValueSignal<unknown>;
+            const fnAsrgs = args as [UnknownFunction];
+            return signal[methodName](...fnAsrgs);
         }
         return (this.apis[api]![method] as UnknownFunction)(...args);
     }

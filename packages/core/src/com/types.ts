@@ -1,5 +1,5 @@
-import { Signal } from '@wixc3/patterns';
 import { SERVICE_CONFIG } from '../symbols.js';
+import { RemotelyAccessibleSignalMethods, ValueSignal } from '../value-signal.js';
 import { Message } from './message-types.js';
 
 export type SerializableArguments = unknown[];
@@ -65,8 +65,8 @@ export type AsyncApi<T extends object> = {
           ? T[P]
           : T[P] extends (...args: infer Args) => infer R
             ? (...args: Args) => Promise<R>
-            : T[P] extends Signal<any>
-              ? Pick<T[P], 'subscribe' | 'unsubscribe'>
+            : T[P] extends ValueSignal<any>
+              ? Pick<T[P], RemotelyAccessibleSignalMethods>
               : never;
 } & {
     [K in Extract<keyof T, keyof object>]: never;
