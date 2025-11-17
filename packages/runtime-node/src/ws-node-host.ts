@@ -330,6 +330,12 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 return;
             }
 
+            if (client.socket !== socket) {
+                this.log('[WsServerHost] Disconnected socket does not match current client socket, ignoring', {oldSocketId: socket.id, newSocketId: client.socket?.id}, clientId);
+                socket.removeAllListeners();
+                return;
+            }
+
             console.log(
                 `[WsServerHost] Setting client ${clientId} as disrupted, starting grace period of ${this.disposeGraceMs}ms`,
             );
