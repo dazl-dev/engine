@@ -1,12 +1,5 @@
 import { parseArgs } from 'node:util';
 import { nodeFs as fs } from '@file-services/node';
-import {
-    ConfigurationEnvironmentMapping,
-    FeatureEnvironmentMapping,
-    importModules,
-    readMetadataFiles,
-    writeMetaFiles,
-} from '@wixc3/engine-runtime-node';
 import esbuild from 'esbuild';
 import { createBuildEndPluginHook } from './esbuild-build-end-plugin.js';
 import { loadConfigFile } from './load-config-file.js';
@@ -17,9 +10,11 @@ import { createBuildConfiguration } from './create-environments-build-configurat
 import { readEntryPoints, writeEntryPoints } from './entrypoint-files.js';
 import { EntryPoints, EntryPointsPaths } from './create-entrypoints.js';
 import { resolveRuntimeOptions } from './resolve-runtime-options.js';
-import type { EngineConfig } from './types.js';
+import type { ConfigurationEnvironmentMapping, EngineConfig, FeatureEnvironmentMapping } from './types.js';
 import { analyzeFeatures } from './find-features/analyze-features.js';
 import { ENGINE_CONFIG_FILE_NAME } from './find-features/build-constants.js';
+import { readMetadataFiles, writeMetaFiles } from './metadata-files.js';
+import { importModules } from './import-modules.js';
 
 export interface RunEngineOptions {
     verbose?: boolean;
@@ -42,6 +37,7 @@ export interface RunEngineOptions {
     publicConfigsRoute?: string;
     configLoadingMode?: ConfigLoadingMode;
     staticBuild?: boolean;
+    customEntrypoints?: string;
     title?: string;
 }
 
@@ -66,6 +62,7 @@ export async function runEngine({
     publicConfigsRoute = 'configs',
     configLoadingMode = 'import',
     staticBuild = false,
+    customEntrypoints = engineConfig.customEntrypoints,
     title,
 }: RunEngineOptions = {}): Promise<{
     featureEnvironmentsMapping: FeatureEnvironmentMapping;
@@ -101,8 +98,11 @@ export async function runEngine({
     } = engineConfig;
 
     await importModules(rootDir, requiredPaths);
-    const cachedMetadata = forceAnalyze ? undefined : readMetadataFiles(outputPath);
-    const cachedEntryPoints = forceAnalyze ? undefined : readEntryPoints(outputPath);
+
+    // reading before cleaning
+    const cachedMetadata = forceAnalyze || customEntrypoints !== undefined ? undefined : readMetadataFiles(outputPath);
+    const cachedEntryPoints = forceAnalyze || customEntrypoints !== undefined ? undefined : readEntryPoints(outputPath);
+
     if (clean) {
         if (verbose) {
             console.log(`Cleaning ${outputPath}`);
@@ -146,7 +146,20 @@ export async function runEngine({
         return resolved;
     };
 
-    if (!cachedMetadata || !cachedEntryPoints) {
+    if (customEntrypoints) {
+        const result = readEntryPoints(customEntrypoints);
+        const customMetadata = readMetadataFiles(customEntrypoints);
+        if (!result) {
+            throw new Error(`Failed to read custom entrypoints from ${customEntrypoints}`);
+        }
+        featureEnvironmentsMapping = customMetadata?.featureEnvironmentsMapping || {
+            availableEnvironments: {},
+            featureToEnvironments: {},
+        };
+        configMapping = customMetadata?.configMapping || {};
+        entryPoints = result;
+        entryPointsPaths = result;
+    } else if (!cachedMetadata || !cachedEntryPoints) {
         const result = await analyze();
         featureEnvironmentsMapping = result.featureEnvironmentsMapping;
         configMapping = result.configMapping;
@@ -254,6 +267,7 @@ export async function runEngine({
             waitForWebRebuild,
             buildConditions,
             extensions,
+            buildConfigurations,
         );
         if (watch) {
             writeWatchSignal(outputPath, { isAliveUrl: `http://localhost:${devServer.port}/is_alive` });

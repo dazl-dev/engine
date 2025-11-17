@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { createTempDirectorySync } from 'create-temp-directory';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { NodeConfigManager } from '@wixc3/engine-cli';
+import { NodeConfigManager } from '@dazl/engine-cli';
 
 describe('NodeConfigManager', function () {
     let cm: NodeConfigManager;

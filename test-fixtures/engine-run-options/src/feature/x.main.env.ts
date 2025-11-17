@@ -1,5 +1,5 @@
 import sampleFeature, { MAIN, PROC } from './x.feature.js';
-import { socketClientInitializer } from '@wixc3/engine-core';
+import { socketClientInitializer } from '@dazl/engine-core';
 
 sampleFeature.setup(MAIN, ({ run, passedOptions }, { COM: { communication } }) => {
     run(async () => {

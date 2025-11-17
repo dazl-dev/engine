@@ -1,4 +1,4 @@
-import type { AsyncApi } from '@wixc3/engine-core';
+import type { AsyncApi } from '@dazl/engine-core';
 import type { CodeService } from '../code-editor/code-service.js';
 
 export interface CompilerExtension {

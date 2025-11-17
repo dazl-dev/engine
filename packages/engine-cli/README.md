@@ -1,11 +1,11 @@
-# @wixc3/engine-cli
+# @dazl/engine-cli
 
 This package provides a command line interface for the engine.
 
 ## Installation
 
 ```bash
-npm install @wixc3/engine-cli
+npm install @dazl/engine-cli
 ```
 
 ## Usage

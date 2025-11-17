@@ -1,9 +1,9 @@
 {
-  "name": "@wixc3/engine-cli",
-  "version": "49.4.3",
+  "name": "@dazl/engine-cli",
+  "version": "51.3.0",
   "type": "module",
   "bin": {
-    "engine": "./bin/engine.mjs"
+    "engine": "./bin/engine.js"
   },
   "scripts": {
     "test": "mocha \"dist/test/**/*.unit.js\""
@@ -15,18 +15,17 @@
     "./default-config-loader": "./dist/entrypoint/default-config-loader.js"
   },
   "dependencies": {
-    "@file-services/node": "^9.4.1",
-    "@file-services/resolve": "^9.4.1",
-    "@file-services/types": "^9.4.1",
-    "@wixc3/create-disposables": "^2.2.0",
-    "@wixc3/engine-core": "^49.4.3",
-    "@wixc3/engine-runtime-node": "^49.4.3",
-    "@wixc3/patterns": "^18.1.1",
-    "@wixc3/resolve-directory-context": "^4.0.0",
-    "cleye": "^1.3.2",
+    "@dazl/engine-core": "^51.3.0",
+    "@dazl/engine-runtime-node": "^51.3.0",
+    "@dazl/patterns": "^18.5.1",
+    "@dazl/resolve-directory-context": "^5.1.0",
+    "@file-services/node": "^11.0.1",
+    "@file-services/resolve": "^11.0.1",
+    "@file-services/types": "^11.0.1",
+    "cleye": "^2.0.0",
     "cors": "^2.8.5",
     "create-listening-server": "^2.1.0",
-    "express": "^4.21.2",
+    "express": "^5.1.0",
     "is-ci": "^4.1.0",
     "promise-assist": "^2.0.1",
     "socket.io": "^4.8.1"
@@ -42,5 +41,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dazl-dev/engine.git",
+    "directory": "packages/engine-cli"
+  }
 }

@@ -1,6 +1,6 @@
 {
-  "name": "@wixc3/engine-runtime-node",
-  "version": "49.4.3",
+  "name": "@dazl/engine-runtime-node",
+  "version": "51.3.0",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -12,14 +12,14 @@
     "test": "mocha \"dist/test/**/*.unit.js\""
   },
   "dependencies": {
-    "@file-services/node": "^9.4.1",
-    "@wixc3/common": "^18.1.1",
-    "@wixc3/engine-core": "^49.4.3",
-    "@wixc3/isomorphic-worker": "^2.0.0",
-    "@wixc3/patterns": "^18.1.1",
+    "@dazl/common": "^18.5.1",
+    "@dazl/engine-core": "^51.3.0",
+    "@dazl/isomorphic-worker": "^2.0.0",
+    "@dazl/patterns": "^18.5.1",
+    "@file-services/node": "^11.0.1",
     "cors": "^2.8.5",
     "create-listening-server": "^2.1.0",
-    "express": "^4.21.2",
+    "express": "^5.1.0",
     "minimist": "^1.2.8",
     "socket.io": "^4.8.1"
   },
@@ -33,5 +33,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dazl-dev/engine.git",
+    "directory": "packages/runtime-node"
+  }
 }

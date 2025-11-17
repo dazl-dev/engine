@@ -7,7 +7,7 @@ import {
     instantiateFeature,
 } from './entities/feature.js';
 import { CREATE_RUNTIME, ENGINE, REGISTER_VALUE, RUN, RUN_OPTIONS } from './symbols.js';
-import { IDisposable, SafeDisposable, SetMultiMap } from '@wixc3/patterns';
+import { IDisposable, SafeDisposable, SetMultiMap } from '@dazl/patterns';
 import type { Context, DisposeFunction, Running } from './types.js';
 
 /**

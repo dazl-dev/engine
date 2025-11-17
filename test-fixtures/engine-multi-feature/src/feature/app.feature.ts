@@ -1,5 +1,5 @@
 import _3rdParty, { MAIN } from '@fixture/3rd-party/dist/3rd-party.feature.js';
-import { Config, Feature, Slot } from '@wixc3/engine-core';
+import { Config, Feature, Slot } from '@dazl/engine-core';
 
 export default class MultiFeature extends Feature<'MultiFeature'> {
     id = 'MultiFeature' as const;

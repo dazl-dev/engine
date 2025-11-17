@@ -1,4 +1,4 @@
-import { Config, Environment, Feature } from '@wixc3/engine-core';
+import { Config, Environment, Feature } from '@dazl/engine-core';
 
 export const main = new Environment('main', 'window', 'single');
 

@@ -1,4 +1,4 @@
-import { COM, Environment, Feature, Service } from '@wixc3/engine-core';
+import { COM, Environment, Feature, Service } from '@dazl/engine-core';
 
 export const NODE_1 = new Environment('node_1', 'node', 'single');
 export const NODE_2 = new Environment('node_2', 'node', 'single');

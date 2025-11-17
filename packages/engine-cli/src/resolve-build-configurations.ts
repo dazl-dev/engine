@@ -1,9 +1,14 @@
-import { IConfigDefinition, createFeatureEnvironmentsMapping } from '@wixc3/engine-runtime-node';
-import { SetMultiMap } from '@wixc3/patterns';
+import { SetMultiMap } from '@dazl/patterns';
 import { createEntryPoints } from './create-entrypoints.js';
-import type { IFeatureDefinition } from './types.js';
+import type {
+    FeatureEnvironmentMapping,
+    IConfigDefinition,
+    IFeatureDefinition,
+    IStaticFeatureDefinition,
+} from './types.js';
 import { createAllValidConfigurationsEnvironmentMapping } from './configuration-mapping.js';
-import { getResolvedEnvironments } from './environments.js';
+import { getResolvedEnvironments, resolveEnvironments } from './environments.js';
+import type { AnyEnvironment } from '@dazl/engine-core';
 
 export function resolveBuildEntryPoints({
     features,
@@ -63,4 +68,24 @@ export function resolveBuildEntryPoints({
     );
 
     return { entryPoints, featureEnvironmentsMapping, configMapping, environments };
+}
+
+/**
+ * This function generates a mapping from feature name to the environments it should run.
+ */
+function createFeatureEnvironmentsMapping(
+    features: ReadonlyMap<string, IStaticFeatureDefinition>,
+): FeatureEnvironmentMapping {
+    const featureToEnvironments: Record<string, string[]> = {};
+    const availableEnvironments: Record<string, AnyEnvironment> = {};
+    for (const feature of features.values()) {
+        const envs = resolveEnvironments(feature.scopedName, features, ['node'], true);
+        const envNames = [];
+        for (const envDescriptor of envs.values()) {
+            availableEnvironments[envDescriptor.name] = envDescriptor.env;
+            envNames.push(envDescriptor.name);
+        }
+        featureToEnvironments[feature.scopedName] = envNames;
+    }
+    return { featureToEnvironments, availableEnvironments };
 }

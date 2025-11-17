@@ -26,6 +26,7 @@ export interface ActiveEnvironment {
 export type Json = boolean | number | string | null | Json[] | { [key: string]: Json };
 export interface Target {
     name?: string;
+    closed?: boolean;
     addEventListener(type: 'message', handler: (event: { data: any; source: Target }) => void, capture?: boolean): void;
     removeEventListener(type: 'message', handler: (event: { data: any }) => void, capture?: boolean): void;
     postMessage(data: any, origin?: any): void;

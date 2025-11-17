@@ -1,5 +1,5 @@
 import type { IFileSystem } from '@file-services/types';
-import { templateCompilerProvider } from '@wixc3/common';
+import { templateCompilerProvider } from '@dazl/common';
 import {
     createFeatureMapper,
     enrichContext,

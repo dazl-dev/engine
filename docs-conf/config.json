@@ -7,9 +7,9 @@
   "temp": "temp",
   "git": {
     "host": "github.com",
-    "org": "wixplosives",
+    "org": "dazl-dev",
     "repo": "engine",
-    "pages": "https://wixplosives.github.io/engine",
-    "github": "https://github.com/wixplosives/engine"
+    "pages": "https://dazl-dev.github.io/engine",
+    "github": "https://github.com/dazl-dev/engine"
   }
 }

@@ -1,4 +1,3 @@
-import React from 'react';
 import { MainEnv } from './react-renderer.feature.js';
 import { Comp } from './someComp.js';
 import somepluginFeature from './someplugin.feature.js';

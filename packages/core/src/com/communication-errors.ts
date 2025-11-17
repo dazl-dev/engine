@@ -23,7 +23,7 @@ export class DuplicateRegistrationError extends EngineCommunicationError {
 
 export class UnConfiguredMethodError extends EngineCommunicationError {
     constructor(api: string, method: string) {
-        super(`Cannot add listener to un-configured method ${api} ${method}.`);
+        super(`Cannot add listener to un-configured method ${api} ${method}. use "declareComEmitter" to configure it.`);
     }
 }
 

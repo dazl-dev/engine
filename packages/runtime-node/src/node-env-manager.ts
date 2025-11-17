@@ -1,36 +1,35 @@
 import {
     AnyEnvironment,
-    BaseHost,
-    ConfigModule,
+    Communication,
     IRunOptions,
+    Message,
     MultiCounter,
-    parseInjectRuntimeConfigConfig,
-} from '@wixc3/engine-core';
-import { IDisposable, SetMultiMap } from '@wixc3/patterns';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+    socketClientInitializer,
+} from '@dazl/engine-core';
+import { IDisposable, SetMultiMap } from '@dazl/patterns';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { WsServerHost } from './core-node/ws-node-host.js';
-import { resolveEnvironments } from './environments.js';
+import { extname } from 'node:path';
+import { WsNodeOptions, WsServerHost } from './ws-node-host.js';
 import { ILaunchHttpServerOptions, launchEngineHttpServer } from './launch-http-server.js';
-import type { IStaticFeatureDefinition, PerformanceMetrics } from './types.js';
-import { runWorker } from './worker-thread-initializer2.js';
-import { getMetricsFromWorker, bindMetricsListener } from './metrics-utils.js';
-import { rpcCall } from './micro-rpc.js';
-
-export type ConfigFilePath = string;
-
-export interface ConfigurationEnvironmentMappingEntry {
-    common: ConfigFilePath[];
-    byEnv: Record<string, ConfigFilePath[]>;
-}
-
-export type ConfigurationEnvironmentMapping = Record<string, ConfigurationEnvironmentMappingEntry>;
+import { workerThreadInitializer2 } from './worker-thread-initializer2.js';
+import { bindMetricsListener, type PerformanceMetrics } from './metrics-utils.js';
 
 export interface RunningNodeEnvironment {
     id: string;
     dispose(): Promise<void>;
     getMetrics(): Promise<PerformanceMetrics>;
 }
+
+export interface NodeEnvConfig extends Pick<AnyEnvironment, 'env' | 'endpointType'> {
+    envType: AnyEnvironment['envType'] | 'remote';
+    remoteUrl?: string;
+}
+
+export type NodeEnvsFeatureMapping = {
+    featureToEnvironments: Record<string, string[]>;
+    availableEnvironments: Record<string, NodeEnvConfig>;
+};
 
 export class NodeEnvManager implements IDisposable {
     private disposables = new Set<() => Promise<void>>();
@@ -46,54 +45,47 @@ export class NodeEnvManager implements IDisposable {
     openEnvironments = new SetMultiMap<string, RunningNodeEnvironment>();
     constructor(
         private importMeta: { url: string },
-        private featureEnvironmentsMapping: FeatureEnvironmentMapping,
-        private configMapping: ConfigurationEnvironmentMapping,
-        private loadModules: (modulePaths: string[]) => Promise<unknown> = importModules,
+        private featureEnvironmentsMapping: NodeEnvsFeatureMapping,
     ) {}
-    public async autoLaunch(runtimeOptions = parseRuntimeOptions(), serverOptions: ILaunchHttpServerOptions = {}) {
+    public async autoLaunch(
+        runtimeOptions: Map<string, string | boolean | undefined>,
+        serverOptions: ILaunchHttpServerOptions = {},
+        hostOptions: WsNodeOptions = {},
+    ) {
         process.env.ENGINE_FLOW_V2_DIST_URL = this.importMeta.url;
         const disposeMetricsListener = bindMetricsListener(() => this.collectMetricsFromAllOpenEnvironments());
         const verbose = Boolean(runtimeOptions.get('verbose'));
-        const topLevelConfigInject = parseInjectRuntimeConfigConfig(runtimeOptions);
 
         const staticDirPath = fileURLToPath(new URL('../web', this.importMeta.url));
         const { port, socketServer, app, close } = await launchEngineHttpServer({ staticDirPath, ...serverOptions });
+        runtimeOptions.set('enginePort', port.toString());
 
-        app.get<[string]>('/configs/*', (req, res) => {
-            const reqEnv = req.query.env as string;
-            if (typeof reqEnv !== 'string') {
-                res.status(400).end('env is required');
-                return;
+        const clientsHost = new WsServerHost(socketServer, hostOptions);
+        clientsHost.addEventListener('message', handleRegistrationOnMessage);
+        const forwardingCom = new Communication(clientsHost, 'clients-host-com');
+        function handleRegistrationOnMessage({ data }: { data: Message }) {
+            const knownClientHost = forwardingCom.getEnvironmentHost(data.from);
+            if (knownClientHost === undefined) {
+                forwardingCom.registerEnv(data.from, clientsHost);
+            } else if (knownClientHost !== clientsHost) {
+                console.warn(
+                    `[ENGINE]: environment ${data.from} is already registered to a different host, reregistering`,
+                );
+                forwardingCom.clearEnvironment(data.from);
+                forwardingCom.registerEnv(data.from, knownClientHost);
             }
-            const requestedConfig = req.params[0];
-            if (verbose) {
-                console.log(`[ENGINE]: requested config ${requestedConfig} for env ${reqEnv}`);
-            }
-            if (!requestedConfig || requestedConfig === 'undefined') {
-                res.json(topLevelConfigInject);
-                return;
-            }
+        }
+        await this.runFeatureEnvironments(verbose, runtimeOptions, forwardingCom);
 
-            this.loadEnvironmentConfigurations(reqEnv, requestedConfig, verbose)
-                .then((configs) => {
-                    return res.json(
-                        (topLevelConfigInject.length ? [...configs, topLevelConfigInject] : configs).flat(),
-                    );
-                })
-                .catch((e) => {
-                    console.error(e);
-                    res.status(500).end(e.stack);
-                });
+        app.get('/health', (_req, res) => {
+            res.status(200).end();
         });
-
-        const host = new WsServerHost(socketServer);
-
-        await this.runFeatureEnvironments(verbose, runtimeOptions, host);
 
         const disposeAutoLaunch = async () => {
             disposeMetricsListener();
             await this.closeAll();
-            await host.dispose();
+            clientsHost.removeEventListener('message', handleRegistrationOnMessage);
+            await clientsHost.dispose();
             await close();
         };
 
@@ -121,7 +113,7 @@ export class NodeEnvManager implements IDisposable {
     private async runFeatureEnvironments(
         verbose: boolean,
         runtimeOptions: Map<string, string | boolean | undefined>,
-        host: WsServerHost,
+        forwardingCom: Communication,
     ) {
         const featureName = runtimeOptions.get('feature');
         if (!featureName || typeof featureName !== 'string') {
@@ -140,26 +132,8 @@ export class NodeEnvManager implements IDisposable {
         }
 
         await Promise.all(
-            envNames.map((envName) => this.initializeWorkerEnvironment(envName, runtimeOptions, host, verbose)),
+            envNames.map((envName) => this.initializeEnvironment(envName, runtimeOptions, forwardingCom, verbose)),
         );
-    }
-
-    private async loadEnvironmentConfigurations(envName: string, configName: string, verbose = false) {
-        const mappingEntry = this.configMapping[configName];
-        if (!mappingEntry) {
-            return [];
-        }
-        const { common, byEnv } = mappingEntry;
-        const configFiles = [...common, ...(byEnv[envName] ?? [])];
-
-        try {
-            if (verbose) {
-                console.log(`[ENGINE]: loading config file for env ${envName} ${configFiles}`);
-            }
-            return (await this.loadModules(configFiles)) as ConfigModule[];
-        } catch (e) {
-            throw new Error(`Failed evaluating config file: ${configFiles}`, { cause: e });
-        }
     }
 
     private createEnvironmentFileUrl(envName: string) {
@@ -167,24 +141,35 @@ export class NodeEnvManager implements IDisposable {
         if (!env) {
             throw new Error(`environment ${envName} not found`);
         }
-        const jsOutExtension = this.importMeta.url.endsWith('.mjs') ? '.mjs' : '.js';
-        return new URL(`${env.env}.${env.envType}${jsOutExtension}`, this.importMeta.url);
+        return new URL(`${env.env}.${env.envType}${extname(this.importMeta.url)}`, this.importMeta.url);
     }
 
-    async initializeWorkerEnvironment(
+    async initializeEnvironment(
         envName: string,
         runtimeOptions: IRunOptions,
-        host: BaseHost | MessagePort,
+        forwardingCom: Communication,
         verbose: boolean,
     ) {
         const env = this.featureEnvironmentsMapping.availableEnvironments[envName];
         if (!env) {
             throw new Error(`environment ${envName} not found`);
         }
-        const envInstanceId =
-            env.endpointType === 'single' ? env.env : `${envName}/${this.envInstanceIdCounter.next(envName)}`;
-        const worker = runWorker(envInstanceId, this.createEnvironmentFileUrl(envName), runtimeOptions);
-        const runningEnv = await connectWorkerToHost(envName, worker, host);
+        let runningEnv: RunningNodeEnvironment;
+        if (env.envType === 'remote') {
+            if (!env.remoteUrl) {
+                throw new Error(`Remote URL for environment ${envName} is not defined`);
+            }
+            runningEnv = await socketClientInitializer({ communication: forwardingCom, env, envUrl: env.remoteUrl });
+        } else {
+            const envWithInit = workerThreadInitializer2({
+                communication: forwardingCom,
+                env: env,
+                workerURL: this.createEnvironmentFileUrl(envName),
+                runtimeOptions: runtimeOptions,
+            });
+            await envWithInit.initialize();
+            runningEnv = envWithInit;
+        }
 
         this.openEnvironments.add(envName, runningEnv);
         if (verbose) {
@@ -207,60 +192,6 @@ export class NodeEnvManager implements IDisposable {
     }
 }
 
-async function importModules(modulePaths: string[]) {
-    const loadedModules: unknown[] = [];
-    for (const modulePath of modulePaths) {
-        const importedModule = await import(pathToFileURL(modulePath).href);
-        loadedModules.push(importedModule.default ?? importedModule);
-    }
-    return loadedModules;
-}
-
-function connectWorkerToHost(envName: string, worker: ReturnType<typeof runWorker>, host: BaseHost | MessagePort) {
-    type AnyMessage = { data?: any };
-    return new Promise<RunningNodeEnvironment>((res, rej) => {
-        const runningEnv: RunningNodeEnvironment = {
-            id: envName,
-            dispose: async () => {
-                worker.removeEventListener('message', handleWorkerMessage);
-                worker.removeEventListener('error', handleInitializeError);
-                host.removeEventListener('message', handleClientMessage);
-                if (process.env.ENGINE_GRACEFUL_TERMINATION !== 'false') {
-                    try {
-                        await rpcCall(worker, 'terminate', 15000);
-                    } catch (e) {
-                        console.error(`failed terminating environment gracefully ${envName}, terminating worker.`, e);
-                    }
-                }
-                await worker.terminate();
-            },
-            getMetrics: async () => {
-                return getMetricsFromWorker(worker);
-            },
-        };
-        const ready = () => {
-            worker.removeEventListener('error', handleInitializeError);
-            res(runningEnv);
-        };
-        const handleWorkerMessage = (message: AnyMessage) => {
-            if (message.data?.type === 'ready') {
-                ready();
-            }
-            host.postMessage(message.data);
-        };
-        const handleClientMessage = (message: AnyMessage) => {
-            worker.postMessage(message.data);
-        };
-        const handleInitializeError = (e: AnyMessage) => {
-            rej(new Error(`failed initializing environment ${envName}`, { cause: e.data }));
-        };
-
-        worker.addEventListener('message', handleWorkerMessage);
-        worker.addEventListener('error', handleInitializeError);
-        host.addEventListener('message', handleClientMessage);
-    });
-}
-
 export function parseRuntimeOptions() {
     const { values: args } = parseArgs({
         strict: false,
@@ -268,29 +199,4 @@ export function parseRuntimeOptions() {
     });
 
     return new Map(Object.entries(args));
-}
-
-export type FeatureEnvironmentMapping = {
-    featureToEnvironments: Record<string, string[]>;
-    availableEnvironments: Record<string, AnyEnvironment>;
-};
-
-/**
- * This function generates a mapping from feature name to the environments it should run.
- */
-export function createFeatureEnvironmentsMapping(
-    features: ReadonlyMap<string, IStaticFeatureDefinition>,
-): FeatureEnvironmentMapping {
-    const featureToEnvironments: Record<string, string[]> = {};
-    const availableEnvironments: Record<string, AnyEnvironment> = {};
-    for (const feature of features.values()) {
-        const envs = resolveEnvironments(feature.scopedName, features, ['node'], true);
-        const envNames = [];
-        for (const envDescriptor of envs.values()) {
-            availableEnvironments[envDescriptor.name] = envDescriptor.env;
-            envNames.push(envDescriptor.name);
-        }
-        featureToEnvironments[feature.scopedName] = envNames;
-    }
-    return { featureToEnvironments, availableEnvironments };
 }

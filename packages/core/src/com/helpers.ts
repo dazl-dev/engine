@@ -1,6 +1,7 @@
 // we cannot mix types of "dom" and "webworker". tsc fails building.
 declare let WorkerGlobalScope: new () => Worker;
 
+import { BaseHost } from './hosts/base-host.js';
 import { Message } from './message-types.js';
 
 export function isWorkerContext(target: unknown): target is Worker {
@@ -11,7 +12,7 @@ export function isWorkerContext(target: unknown): target is Worker {
 }
 
 export function isWindow(win: unknown): win is Window {
-    return typeof Window !== 'undefined' && win instanceof Window;
+    return typeof Window !== 'undefined' && win instanceof Window || (win instanceof BaseHost && win.parent !== undefined);
 }
 
 export function isIframe(iframe: unknown): iframe is HTMLIFrameElement {
@@ -30,7 +31,7 @@ const undefinedPlaceholder = '__undefined_placeholder__';
 
 /**
  * Serialization/deserialization is needed in order to fix the issue with undefined arguments in remote API calls:
- * https://github.com/wixplosives/engine/issues/1434
+ * https://github.com/dazl-dev/engine/issues/1434
  */
 export const serializeApiCallArguments = (args: unknown[]): unknown[] =>
     args.map((arg) => (arg === undefined ? undefinedPlaceholder : arg));

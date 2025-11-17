@@ -1,5 +1,5 @@
 import type { IFileSystemSync } from '@file-services/types';
-import type { INpmPackage } from '@wixc3/resolve-directory-context';
+import type { INpmPackage } from '@dazl/resolve-directory-context';
 import type { PackageJson } from 'type-fest';
 
 const featurePackagePostfix = '-feature';
@@ -9,7 +9,7 @@ export function scopeToPackage(packageName: string, entityName: string) {
 }
 
 /**
- * Removes package scope (e.g `@wix`) and posfix `-feature`.
+ * Removes package scope (e.g `@scope`) and posfix `-feature`.
  */
 export function simplifyPackageName(name: string) {
     const indexOfSlash = name.indexOf('/');

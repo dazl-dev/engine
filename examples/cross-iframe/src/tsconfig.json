@@ -6,6 +6,5 @@
   "references": [
     { "path": "../../../packages/core/src" },
     { "path": "../../../packages/runtime-node/src" },
-    { "path": "../../../packages/test-kit/src" }
   ]
 }

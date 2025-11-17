@@ -1,4 +1,4 @@
-import { COM, Environment, Feature, Service, Slot } from '@wixc3/engine-core';
+import { COM, Environment, Feature, Service, Slot } from '@dazl/engine-core';
 import type { CodeService } from './code-service.js';
 import type { ErrorService } from './error-service.js';
 

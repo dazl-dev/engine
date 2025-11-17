@@ -1,14 +1,21 @@
 import type { Plugin } from 'esbuild';
-import type { AnyEnvironment, FeatureClass, TopLevelConfig } from '@wixc3/engine-core';
 import type {
-    IEnvironmentDescriptor,
-    IStaticFeatureDefinition,
-    PerformanceMetrics,
-    TopLevelConfigProvider,
-} from '@wixc3/engine-runtime-node';
+    AnyEnvironment,
+    EnvironmentTypes,
+    FeatureClass,
+    MultiEnvironment,
+    TopLevelConfig,
+} from '@dazl/engine-core';
+import type { PerformanceMetrics } from '@dazl/engine-runtime-node';
 import type { BuildOptions } from 'esbuild';
 import type io from 'socket.io';
 
+export type TopLevelConfigProvider = (envName: string) => TopLevelConfig;
+export interface IConfigDefinition {
+    name: string;
+    envName?: string;
+    filePath: string;
+}
 export interface IFeatureTarget {
     featureName?: string;
     configName?: string;
@@ -47,6 +54,7 @@ export interface EngineConfig {
     sourcesRoot?: string;
     favicon?: string;
     buildPlugins?: Plugin[] | OverrideConfigHook;
+    customEntrypoints?: string;
 
     /**
      * extra resolver conditions to add while building project.
@@ -67,7 +75,7 @@ export interface StaticConfig {
 export type BuildConfiguration = {
     webConfig: BuildOptions;
     nodeConfig: BuildOptions;
-    dev: boolean;
+    dev?: boolean;
 };
 
 export type OverrideConfigHook = (config: BuildConfiguration) => BuildConfiguration;
@@ -114,4 +122,47 @@ export interface IFeatureModule {
      * it will be set as `'processing': 'webworker'`
      */
     usedContexts?: Record<string, string>;
+}
+export type FeatureEnvironmentMapping = {
+    featureToEnvironments: Record<string, string[]>;
+    availableEnvironments: Record<string, AnyEnvironment>;
+};
+
+export type ConfigFilePath = string;
+
+export interface ConfigurationEnvironmentMappingEntry {
+    common: ConfigFilePath[];
+    byEnv: Record<string, ConfigFilePath[]>;
+}
+
+export type ConfigurationEnvironmentMapping = Record<string, ConfigurationEnvironmentMappingEntry>;
+
+export interface IStaticFeatureDefinition {
+    contextFilePaths: Record<string, string>;
+    envFilePaths: Record<string, string>;
+    preloadFilePaths: Record<string, string>;
+    dependencies: string[];
+    /**
+     * the feature's name scoped to the package.json package name.
+     * @example
+     * ```
+     * packageName = '@some-scope/my-package'
+     * featureName = 'my-feature'
+     * scopedName === 'my-package/my-feature'
+     * ```
+     * if package name is equal to the feature name, then the scoped name will just be the package name
+     * if package name ends with - feature, we remove it from the scope
+     */
+    scopedName: string;
+    resolvedContexts: Record<string, string>;
+    packageName: string;
+    filePath: string;
+    exportedEnvs: IEnvironmentDescriptor<AnyEnvironment>[];
+}
+export interface IEnvironmentDescriptor<ENV extends AnyEnvironment = AnyEnvironment> {
+    type: EnvironmentTypes;
+    name: string;
+    childEnvName?: string;
+    flatDependencies?: IEnvironmentDescriptor<MultiEnvironment<ENV['envType']>>[];
+    env: ENV;
 }

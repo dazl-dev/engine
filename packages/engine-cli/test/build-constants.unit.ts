@@ -1,4 +1,4 @@
-import { isPreloadFile, parsePreloadFileName } from '@wixc3/engine-cli';
+import { isPreloadFile, parsePreloadFileName } from '@dazl/engine-cli';
 import { expect } from 'chai';
 
 describe('isPreloadFile', () => {

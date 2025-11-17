@@ -1,7 +1,11 @@
-import type { PerformanceMetrics } from './types.js';
 import type { ChildProcess } from 'node:child_process';
-import type { Worker } from '@wixc3/isomorphic-worker/worker';
+import type { Worker } from '@dazl/isomorphic-worker/worker';
 import { isValidRpcResponse, rpcCall, getNextMessageId, bindRpcListener } from './micro-rpc.js';
+
+export type PerformanceMetrics = {
+    marks: PerformanceEntry[];
+    measures: PerformanceEntry[];
+};
 
 export function bindMetricsListener(
     customFetcher: () => Promise<PerformanceMetrics> | PerformanceMetrics = localPerformanceFetcher,

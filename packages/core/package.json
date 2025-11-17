@@ -1,6 +1,6 @@
 {
-  "name": "@wixc3/engine-core",
-  "version": "49.4.3",
+  "name": "@dazl/engine-core",
+  "version": "51.3.0",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -15,11 +15,10 @@
     "test:browser": "mocha-web \"dist/test/**/*.spec.js\""
   },
   "dependencies": {
-    "@wixc3/isomorphic-worker": "^2.0.0",
-    "@wixc3/patterns": "^18.1.1",
+    "@dazl/isomorphic-worker": "^2.0.0",
+    "@dazl/patterns": "^18.5.1",
     "promise-assist": "^2.0.1",
-    "socket.io-client": "^4.8.1",
-    "typescript-type-utils": "^0.1.0"
+    "socket.io-client": "^4.8.1"
   },
   "files": [
     "dist",
@@ -31,5 +30,10 @@
   "publishConfig": {
     "access": "public"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dazl-dev/engine.git",
+    "directory": "packages/core"
+  }
 }

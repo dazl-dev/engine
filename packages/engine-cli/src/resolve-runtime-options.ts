@@ -1,4 +1,4 @@
-import type { TopLevelConfig } from '@wixc3/engine-core';
+import type { TopLevelConfig } from '@dazl/engine-core';
 import path from 'node:path';
 
 export interface RunNodeManagerOptions {

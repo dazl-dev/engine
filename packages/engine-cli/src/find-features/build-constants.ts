@@ -9,7 +9,7 @@ export const CONTEXT_FILENAME_HINT = '.context.';
 export const ENGINE_CONFIG_FILE_NAME = 'engine.config.js';
 
 // Packages
-export const CORE_PACKAGE = '@wixc3/engine-core';
+export const CORE_PACKAGE = '@dazl/engine-core';
 
 // Used query params
 export const CONFIG_QUERY_PARAM = 'config';

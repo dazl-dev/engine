@@ -22,6 +22,15 @@ export interface CreateBuildConfigOptions {
     favicon?: string;
 }
 
+function parseEntryFile(entryFile: string) {
+    const parts = entryFile.split('.');
+    if (parts.length !== 3) {
+        throw new Error(`Invalid entry file: ${entryFile}`);
+    }
+    const [envName, envType, ext] = parts;
+    return { envName, envType, ext, key: `${envName}.${envType}` };
+}
+
 export function createBuildConfiguration(options: CreateBuildConfigOptions) {
     const {
         dev,
@@ -40,6 +49,11 @@ export function createBuildConfiguration(options: CreateBuildConfigOptions) {
     } = options;
     const { webEntryPoints, nodeEntryPoints } = entryPoints;
     const { webEntryPointsPaths, nodeEntryPointsPaths } = entryPointsPaths || {};
+
+    const webEntryPointsNoExt = new Set<string>();
+    for (const key of webEntryPoints.keys()) {
+        webEntryPointsNoExt.add(parseEntryFile(key).key);
+    }
 
     const commonPlugins = Array.isArray(buildPlugins) ? buildPlugins : [];
 
@@ -84,12 +98,12 @@ export function createBuildConfiguration(options: CreateBuildConfigOptions) {
                 entryPointsOnDisk: webEntryPointsPaths,
             }),
             htmlPlugin({
-                toHtmlPath(key) {
-                    const entry = webEntryPoints.get(key);
+                toHtmlPath(filename) {
+                    const { envName, envType, key } = parseEntryFile(filename);
+                    const entry = webEntryPointsNoExt.has(key);
                     if (!entry) {
                         throw new Error(`Could not find entrypoint for ${key} in ${[...webEntryPoints.keys()]}}`);
                     }
-                    const [envName, envType] = key.split('.');
                     const htmlFileName = envType === 'electron-renderer' ? `${envName}.${envType}` : envName;
                     return `${htmlFileName}.html`;
                 },

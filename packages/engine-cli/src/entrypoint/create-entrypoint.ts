@@ -1,12 +1,12 @@
-import { TopLevelConfig } from '@wixc3/engine-core';
+import { TopLevelConfig } from '@dazl/engine-core';
+import type { SetMultiMap } from '@dazl/patterns';
+import { relative } from 'node:path';
 import type {
     ConfigurationEnvironmentMapping,
     IConfigDefinition,
     IEnvironmentDescriptor,
-} from '@wixc3/engine-runtime-node';
-import type { SetMultiMap } from '@wixc3/patterns';
-import { relative } from 'node:path';
-import type { IFeatureDefinition } from '../types.js';
+    IFeatureDefinition,
+} from '../types.js';
 
 const { stringify } = JSON;
 

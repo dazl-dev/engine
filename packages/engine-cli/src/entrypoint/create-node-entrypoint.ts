@@ -1,6 +1,6 @@
-import { Environment } from '@wixc3/engine-core';
-import { ConfigurationEnvironmentMapping, FeatureEnvironmentMapping } from '@wixc3/engine-runtime-node';
+import { Environment } from '@dazl/engine-core';
 import { ICreateEntrypointsOptions, createConfigLoaders, createFeatureLoadersSourceCode } from './create-entrypoint.js';
+import { ConfigurationEnvironmentMapping, FeatureEnvironmentMapping } from '../types.js';
 
 const { stringify } = JSON;
 
@@ -15,7 +15,7 @@ export function createNodeEnvironmentManagerEntrypoint({
 }) {
     return `
 import { pathToFileURL } from 'node:url';    
-import { NodeEnvManager } from '@wixc3/engine-runtime-node';
+import { NodeEnvManager } from '@dazl/engine-runtime-node';
 
 const featureEnvironmentsMapping = ${stringify(featureEnvironmentsMapping)};
 const configMapping = ${stringify(configMapping)};
@@ -59,8 +59,8 @@ export function createNodeEntrypoint({
         loadConfigFileTemplate: (filePath) => `import(${stringify(filePath)})`,
     });
     return `
-import { main, COM } from "@wixc3/engine-core";
-import { bindRpcListener, bindMetricsListener, parseRuntimeOptions, ParentPortHost } from "@wixc3/engine-runtime-node";
+import { main, COM } from "@dazl/engine-core";
+import { bindRpcListener, bindMetricsListener, parseRuntimeOptions, ParentPortHost } from "@dazl/engine-runtime-node";
 import { parseArgs } from "node:util";
 import { workerData } from "node:worker_threads";
 

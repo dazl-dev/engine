@@ -14,7 +14,7 @@ import {
     type IRunOptions,
     type Running,
     type RunningFeatures,
-} from '@wixc3/engine-core';
+} from '@dazl/engine-core';
 import type { EQUAL, ExpectTrue } from 'typescript-type-utils';
 import { typeCheck } from '../type-check.js';
 

@@ -1,4 +1,4 @@
-import { Environment } from '@wixc3/engine-core';
+import { Environment } from '@dazl/engine-core';
 import { ICreateEntrypointsOptions, createConfigLoaders, createFeatureLoadersSourceCode } from './create-entrypoint.js';
 
 const { stringify } = JSON;
@@ -45,7 +45,7 @@ export function createMainEntrypoint({
     );
 
     return `
-import { main, COM, getEngineEntryOptions } from '@wixc3/engine-core';
+import { main, COM, getEngineEntryOptions } from '@dazl/engine-core';
 
 const options = getEngineEntryOptions(${stringify(env.name)}, globalThis)
 const runtimePublicPath = ${runtimePublicPath};
@@ -100,7 +100,7 @@ const topLevelConfigLoaderPath = '/top-level-config-loader';
 function webLoadConfigFileTemplate(filePath: string, scopedName: string, configEnvName = ''): string {
     const request = stringify(
         topLevelConfigLoaderPath +
-            `?configLoaderModuleName=@wixc3/engine-cli/default-config-loader&scopedName=${scopedName}&envName=${configEnvName}!` +
+            `?configLoaderModuleName=@dazl/engine-cli/default-config-loader&scopedName=${scopedName}&envName=${configEnvName}!` +
             filePath,
     );
     return `import(/* webpackChunkName: "[config]${scopedName}${configEnvName}" */ /* webpackMode: 'eager' */ ${request})`;

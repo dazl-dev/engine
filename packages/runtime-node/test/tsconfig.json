@@ -5,8 +5,7 @@
   },
   "references": [
     { "path": "../src" },
-    { "path": "../../test-kit/src" },
-    { "path": "../../../test-fixtures/multi-node/src" },
+    { "path": "../test-kit" },
     { "path": "../../../test-fixtures/multi-socket-node/src" },
     { "path": "../../../test-fixtures/default-args-echo/src" }
   ]

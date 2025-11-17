@@ -19,7 +19,11 @@ export class BaseHost implements Target {
         }
     }
 
-    public removeEventListener(name: 'message', handler: (e: { data: Message }) => void, _capture?: boolean) {
+    public removeEventListener(
+        name: 'message',
+        handler: (e: { data: Message; source: Target }) => void,
+        _capture?: boolean,
+    ) {
         const handlers = this.handlers.get(name);
         if (handlers) {
             handlers.delete(handler);

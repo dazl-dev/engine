@@ -1,5 +1,5 @@
-import type { ConfigurationEnvironmentMapping, IConfigDefinition } from '@wixc3/engine-runtime-node';
-import type { SetMultiMap } from '@wixc3/patterns';
+import type { SetMultiMap } from '@dazl/patterns';
+import type { ConfigurationEnvironmentMapping, IConfigDefinition } from './types.js';
 
 export const createAllValidConfigurationsEnvironmentMapping = (
     configurations: SetMultiMap<string, IConfigDefinition>,

@@ -1,4 +1,4 @@
-import { FETCH_OPTIONS_PARAM_NAME, iframeInitializer, installRunOptionsInitMessageHandler } from '@wixc3/engine-core';
+import { FETCH_OPTIONS_PARAM_NAME, iframeInitializer, installRunOptionsInitMessageHandler } from '@dazl/engine-core';
 import { mainEnv, iframeEnv } from './echo.feature.js';
 import fixture from './configured-iframe.feature.js';
 
@@ -28,7 +28,6 @@ fixture.setup(mainEnv, ({ run }, { COM: { communication }, echoFeature: { echoSe
         button.id = fConfig.buttonTestId;
         button.className = `init-iframe-button-${i}`;
         button.onclick = async () => {
-            // this should be removed after tech debt is solved https://github.com/wixplosives/codux/issues/24381
             if (url.searchParams.get(FETCH_OPTIONS_PARAM_NAME) === 'true' && myFrame.contentWindow) {
                 const removeListener = installRunOptionsInitMessageHandler(myFrame.contentWindow, (postBack) => {
                     removeListener();

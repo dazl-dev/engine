@@ -1,7 +1,6 @@
-import { AnyEnvironment } from '@wixc3/engine-core';
-import type { IEnvironmentDescriptor } from '@wixc3/engine-runtime-node';
-import { SetMultiMap } from '@wixc3/patterns';
-import type { IFeatureDefinition } from './types.js';
+import { type AnyEnvironment, type EnvironmentTypes, flattenTree } from '@dazl/engine-core';
+import { SetMultiMap } from '@dazl/patterns';
+import type { IEnvironmentDescriptor, IFeatureDefinition, IStaticFeatureDefinition } from './types.js';
 
 export interface GetResolveEnvironmentsParams {
     featureName?: string;
@@ -117,4 +116,37 @@ function convertEnvRecordToSetMultiMap(record: Record<string, string>, set = new
         set.add(env, resolvedContext);
     }
     return set;
+}
+
+export function resolveEnvironments(
+    featureName: string,
+    features: ReadonlyMap<string, IStaticFeatureDefinition>,
+    envTypes?: EnvironmentTypes[] | EnvironmentTypes,
+    filterByContext = true,
+) {
+    const environmentTypesToFilterBy = Array.isArray(envTypes) ? envTypes : [envTypes];
+    const filteredEnvironments = new Set<IEnvironmentDescriptor>();
+
+    const featureDefinition = features.get(featureName);
+    if (!featureDefinition) {
+        const featureNames = Array.from(features.keys());
+        throw new Error(`cannot find feature ${featureName}. available features: ${featureNames.sort().join(', ')}`);
+    }
+    const { resolvedContexts } = featureDefinition;
+    const deepDefsForFeature = flattenTree(featureDefinition, (f) =>
+        f.dependencies.map((fName) => features.get(fName)!),
+    );
+    for (const { exportedEnvs = [] } of deepDefsForFeature) {
+        for (const exportedEnv of exportedEnvs) {
+            if (
+                (!envTypes || environmentTypesToFilterBy.includes(exportedEnv.type)) &&
+                (!filterByContext ||
+                    !exportedEnv.childEnvName ||
+                    resolvedContexts[exportedEnv.name] === exportedEnv.childEnvName)
+            ) {
+                filteredEnvironments.add(exportedEnv);
+            }
+        }
+    }
+    return filteredEnvironments;
 }

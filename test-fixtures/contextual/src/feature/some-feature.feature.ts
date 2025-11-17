@@ -1,4 +1,4 @@
-import { COM, Environment, Feature, Service, ContextualEnvironment } from '@wixc3/engine-core';
+import { COM, Environment, Feature, Service, ContextualEnvironment } from '@dazl/engine-core';
 
 export const mainEnv = new Environment('main', 'window', 'single');
 

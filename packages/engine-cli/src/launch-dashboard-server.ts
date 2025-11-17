@@ -1,11 +1,15 @@
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { nodeFs as fs } from '@file-services/node';
-import { ConfigurationEnvironmentMapping, FeatureEnvironmentMapping } from '@wixc3/engine-runtime-node';
 import express from 'express';
 import { LaunchOptions, RouteMiddleware, launchServer } from './start-dev-server.js';
 import { runLocalNodeManager } from './run-local-mode-manager.js';
 import { NodeConfigManager } from './node-config-manager.js';
-import type { StaticConfig } from './types.js';
+import type {
+    BuildConfiguration,
+    ConfigurationEnvironmentMapping,
+    FeatureEnvironmentMapping,
+    StaticConfig,
+} from './types.js';
 
 export type ConfigLoadingMode = 'fresh' | 'watch' | 'import';
 
@@ -23,6 +27,7 @@ export async function launchDashboardServer(
     waitForBuildReady?: (cb: () => void) => boolean,
     buildConditions?: string[],
     extensions?: string[],
+    buildConfiguration?: BuildConfiguration,
 ): Promise<ReturnType<typeof launchServer>> {
     const staticMiddlewares = serveStatic.map(({ route, directoryPath }) => ({
         path: route,
@@ -43,8 +48,16 @@ export async function launchDashboardServer(
     const autoRunFeatureName = runtimeOptions.get('feature') as string | undefined;
     if (autoRunFeatureName) {
         const port = await run(autoRunFeatureName, runtimeOptions.get('config') as string, '');
-        // TODO: get the names of main entry points from the build configurations
-        console.log(`Engine application in running at http://localhost:${port}/main.html`);
+        if (Array.isArray(buildConfiguration?.webConfig.entryPoints)) {
+            buildConfiguration?.webConfig.entryPoints?.map((filePath) => {
+                if (typeof filePath === 'string') {
+                    const name = basename(filePath);
+                    console.log(
+                        `Engine application in running at http://localhost:${port}/${name.replace('.web.ts', '.html')}`,
+                    );
+                }
+            });
+        }
     } else {
         console.log('No explicit feature name provided skipping auto launch use the dashboard to run features');
     }
@@ -137,21 +150,14 @@ function runOnDemandSingleEnvironment(
                 runOptions.set(key, String(value));
             }
         }
-        const runningNodeManager = await runLocalNodeManager(
-            featureEnvironmentsMapping,
-            configMapping,
-            runOptions,
-            outputPath,
-            configManager,
-            {
-                routeMiddlewares: [
-                    {
-                        path: '*',
-                        handlers: blockDuringBuild(waitForBuildReady),
-                    },
-                ],
-            },
-        );
+        const runningNodeManager = await runLocalNodeManager(featureEnvironmentsMapping, runOptions, outputPath, {
+            routeMiddlewares: [
+                {
+                    path: '*splat',
+                    handlers: blockDuringBuild(waitForBuildReady),
+                },
+            ],
+        });
         openManagers.set(`${featureName}(+)${configName}(+)${runtimeArgs}`, runningNodeManager);
         return runningNodeManager.port;
     }

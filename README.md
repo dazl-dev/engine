@@ -1,16 +1,18 @@
-# Engine [![Build Status](https://github.com/wixplosives/engine/workflows/tests/badge.svg)](https://github.com/wixplosives/engine/actions)
+# Engine
 
 ![Engine logo](./guides/static/img/logo_dark.svg)
 
 ## Guides
 
-You can reade some guides [here](https://wixplosives.github.io/engine/guides/)
+You can read some guides [here](https://dazl-dev.github.io/engine/guides/).
 
 ## Packages
 
-- **[@wixc3/engine-core](https://github.com/wixplosives/engine/tree/master/packages/core)** - core runtime entities.
+- **[@dazl/engine-core](https://github.com/dazl-dev/engine/tree/main/packages/core)** - core runtime entities.
 
-- **[@wixc3/engine-test-kit](https://github.com/wixplosives/engine/tree/master/packages/test-kit)** - `withFeature` and other test mechanisms.
+- **[@dazl/engine-cli](https://github.com/dazl-dev/engine/tree/main/packages/engine-cli)**
+
+- **[@dazl/engine-runtime-node](https://github.com/dazl-dev/engine/tree/main/packages/runtime-node)**
 
 ## License
 

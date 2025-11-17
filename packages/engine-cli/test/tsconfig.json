@@ -3,15 +3,5 @@
   "compilerOptions": {
     "outDir": "../dist/test"
   },
-  "references": [
-    {
-      "path": "../src"
-    },
-    {
-      "path": "../../test-kit/src"
-    },
-    {
-      "path": "../../runtime-node/src"
-    }
-  ]
+  "references": [{ "path": "../src" }, { "path": "../../runtime-node/src" }]
 }

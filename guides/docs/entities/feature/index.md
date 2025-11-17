@@ -31,7 +31,7 @@ For example:
 ```ts
 /* my-feature.feature.ts */
 
-import { Feature } from '@wixc3/engine-core';
+import { Feature } from '@dazl/engine-core';
 
 /* defining a new feature */
 export default new Feature({

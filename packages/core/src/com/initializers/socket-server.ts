@@ -1,15 +1,20 @@
 import type { SocketOptions } from 'socket.io-client';
 import { WsClientHost } from '../hosts/ws-client-host.js';
-import type { InitializerOptions } from './types.js';
+import { Communication } from '../communication.js';
 
-export interface SocketClientInitializerOptions extends InitializerOptions, Partial<SocketOptions> {}
+export interface SocketClientInitializerOptions extends Partial<SocketOptions> {
+    communication: Communication;
+    env: { env: string };
+    envUrl?: string;
+}
 
 export const socketClientInitializer = async ({
     communication,
     env: { env },
+    envUrl: serverUrl,
     ...socketClientOptions
 }: SocketClientInitializerOptions) => {
-    const url = communication.topology[env] || location.origin;
+    const url = serverUrl || communication.topology[env] || location.origin;
     const instanceId = env;
     const host = new WsClientHost(url, socketClientOptions);
     if (communication.getEnvironmentHost(instanceId)) {
@@ -29,15 +34,15 @@ export const socketClientInitializer = async ({
 
     return {
         id: instanceId,
-        onDisconnect: (cb: () => void) => {
-            host.subscribers.on('disconnect', cb);
-        },
-        onReconnect: (cb: () => void) => {
-            host.subscribers.on('reconnect', cb);
-        },
         dispose: () => {
             communication.clearEnvironment(instanceId, undefined, false);
             return host.dispose();
+        },
+        getMetrics: () => {
+            return Promise.resolve({
+                marks: [],
+                measures: [],
+            });
         },
     };
 };

@@ -73,7 +73,7 @@ export class FeatureLoadersRegistry {
         runtimeOptions: Record<string, string | boolean>,
         resolvedContexts: Record<string, string>,
     ): Promise<FeatureClass[]> {
-        const loaded = [];
+        const loaded: Array<IFeatureLoader | Promise<IFeatureLoader>> = [];
         const dependencies = await this.getFeatureDependencies(rootFeatureName);
         for (const depName of dependencies.reverse()) {
             if (!this.loadedFeatures.has(depName)) {
@@ -82,7 +82,7 @@ export class FeatureLoadersRegistry {
                 loaded.push(loader);
             }
         }
-        const featureLoaders = await Promise.all(loaded);
+        const featureLoaders = await Promise.all(loaded as Promise<IFeatureLoader>[]);
         const allPreloadInitFunctions = [];
         for (const featureLoader of featureLoaders) {
             if (featureLoader.preload) {

@@ -1,4 +1,4 @@
-import { Feature } from '@wixc3/engine-core';
+import { Feature } from '@dazl/engine-core';
 import Code from './code-editor/code-editor.feature.js';
 import EndWithCompiler from './end-with/end-with.feature.js';
 import Preview from './preview/compiler.feature.js';

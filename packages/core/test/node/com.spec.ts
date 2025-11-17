@@ -1,19 +1,18 @@
-import { createDisposables } from '@wixc3/create-disposables';
+import { createDisposables } from '@dazl/create-disposables';
 import {
     BaseHost,
     COM,
     Communication,
     Environment,
-    EventEmitterHost,
     Feature,
     RuntimeEngine,
     SERVICE_CONFIG,
     Service,
     Slot,
+    declareComEmitter,
     multiTenantMethod,
-    type Message,
-} from '@wixc3/engine-core';
-import { EventEmitter, Signal } from '@wixc3/patterns';
+} from '@dazl/engine-core';
+import { Signal } from '@dazl/patterns';
 import * as chai from 'chai';
 import { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
@@ -476,6 +475,53 @@ describe('Communication', () => {
         ).to.eq(testText);
     });
 
+    it('communication local clear remove listeners form registered services', async () => {
+        const echoService = {
+            handlers: new Set<(s: string) => void>(),
+            emit(s: string) {
+                for (const handler of this.handlers) {
+                    handler(s);
+                }
+            },
+            sub(fn: (s: string) => void) {
+                this.handlers.add(fn);
+            },
+            unsub(fn: (s: string) => void) {
+                this.handlers.delete(fn);
+            },
+        };
+        const echoServiceComID = { id: 'echoService' };
+
+        const client1RootHost = new BaseHost();
+        const serverRootHost = new BaseHost();
+
+        const client1 = new Communication(client1RootHost, 'client1');
+        const serverEnv = new Communication(serverRootHost, 'server');
+
+        // server env setup
+        const client1RemoteHost = client1RootHost.open();
+        serverEnv.registerMessageHandler(client1RemoteHost);
+        client1.registerEnv('server', client1RemoteHost);
+
+        serverEnv.registerAPI(echoServiceComID, echoService);
+
+        const proxy = client1.apiProxy<typeof echoService>(Promise.resolve({ id: 'server' }), echoServiceComID, {
+            ...declareComEmitter('sub', 'unsub'),
+        });
+        const logs: string[] = [];
+        await proxy.sub((e) => {
+            logs.push(`event:${e}`);
+        });
+        echoService.emit('1');
+        expect(logs).to.eql(['event:1']);
+
+        serverEnv.clearEnvironment('client1');
+
+        echoService.emit('2');
+        expect(logs).to.eql(['event:1']);
+        expect(echoService.handlers.size, 'handler was removed').to.eq(0);
+    });
+
     it('supports answering forwarded message from a forwarded message', async () => {
         /**
          * The flow of the test is as follows:
@@ -572,6 +618,117 @@ describe('Communication', () => {
 
         await expect(apiProxy.test()).to.be.rejected;
     });
+    it('should report env re connection', () => {
+        const onEnvReconnect = spy();
+        const hostA = new BaseHost();
+        const hostB = new BaseHost();
+        const comA = new Communication(hostA, 'A');
+        const comB = new Communication(hostB, 'B'); // ready is ignored since nothing is connected
+        comA.registerEnv('B', hostB);
+        comA.registerMessageHandler(hostB);
+        comB.registerEnv('A', hostA);
+        comB.registerMessageHandler(hostA);
+
+        comA.subscribeToEnvironmentReconnect(onEnvReconnect);
+
+        new Communication(hostB, 'B'); // first ready
+
+        expect(onEnvReconnect).to.have.have.callCount(0);
+
+        new Communication(hostB, 'B'); // re-connect
+
+        expect(onEnvReconnect).to.have.have.callCount(1);
+    });
+    it('should auto connect event listeners when env is re-connected', async () => {
+        const onEventReconnect = spy();
+        const onEventEmitterCall = spy();
+        const hostA = new BaseHost('A-host');
+        const hostB = hostA.open('B-host');
+        const comA = new Communication(hostA, 'A');
+        const comB_api1 = { service: getMockApi() };
+        const comB = new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api1 });
+        comA.registerEnv('B', hostB);
+        comB.registerEnv('A', hostA);
+        comA.subscribeToEnvironmentReconnect(onEventReconnect);
+
+        // setup api between comA and comB
+        const apiProxy = comA.apiProxy<typeof comB_api1.service>(
+            { id: 'B' },
+            { id: 'service' },
+            { listen: { listener: true, emitOnly: true } },
+        );
+
+        await apiProxy.listen(onEventEmitterCall);
+
+        comB_api1.service.invoke();
+
+        await waitFor(() => {
+            expect(onEventEmitterCall, 'invoked event before reconnect').to.have.have.callCount(1);
+        });
+
+        // simulate unavailable communication
+        comB.removeMessageHandler(hostB);
+        // reconnect
+        const comB_api2 = { service: getMockApi() };
+        new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api2 });
+
+        await waitFor(() => {
+            expect(onEventReconnect, 'reconnected').to.been.calledWith('B');
+            expect(comB_api2.service.getListenersCount(), 'event handler re-register').to.eq(1);
+        });
+
+        comB_api2.service.invoke();
+
+        await waitFor(() => {
+            expect(onEventEmitterCall, 'invoked event after reconnect').to.have.have.callCount(2);
+        });
+    });
+    it('should auto connect event listeners when env is re-connected (replaced host)', async () => {
+        const onEventReconnect = spy();
+        const onEventEmitterCall = spy();
+        const hostA = new BaseHost('A-host');
+        const hostB = hostA.open('B-host');
+        const comA = new Communication(hostA, 'A');
+        const comB_api1 = { service: getMockApi() };
+        const comB = new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api1 });
+        comA.registerEnv('B', hostB);
+        comB.registerEnv('A', hostA);
+        comA.subscribeToEnvironmentReconnect(onEventReconnect);
+
+        // setup api between comA and comB
+        const apiProxy = comA.apiProxy<typeof comB_api1.service>(
+            { id: 'B' },
+            { id: 'service' },
+            { listen: { listener: true, emitOnly: true } },
+        );
+
+        await apiProxy.listen(onEventEmitterCall);
+
+        comB_api1.service.invoke();
+
+        await waitFor(() => {
+            expect(onEventEmitterCall, 'invoked event before reconnect').to.have.have.callCount(1);
+        });
+
+        // simulate unavailable communication
+        comB.removeMessageHandler(hostB);
+        // reconnect - simulate another window
+        const hostB_2 = new BaseHost('B-host-2'); //hostA.open('B-host-2');
+        comA.registerMessageHandler(hostB_2);
+        const comB_api2 = { service: getMockApi() };
+        new Communication(hostB_2, 'B', undefined, undefined, undefined, { apis: comB_api2 });
+
+        await waitFor(() => {
+            expect(onEventReconnect, 'reconnected').to.been.calledWith('B');
+            expect(comB_api2.service.getListenersCount(), 'event handler re-register').to.eq(1);
+        });
+
+        comB_api2.service.invoke();
+
+        await waitFor(() => {
+            expect(onEventEmitterCall, 'invoked event after reconnect').to.have.have.callCount(2);
+        });
+    });
 });
 
 describe('environment-dependencies communication', () => {
@@ -639,92 +796,6 @@ describe('environment-dependencies communication', () => {
 
         const env1EngineEnv2 = new RuntimeEngine(env2);
         await env1EngineEnv2.run([f]);
-    });
-});
-
-describe('Event Emitter communication', () => {
-    it('single communication', async () => {
-        const eventEmitter = new EventEmitter<{ message: Message }>();
-        const host = new EventEmitterHost(eventEmitter);
-
-        const main = new Communication(host, 'main');
-
-        main.registerAPI(
-            { id: 'echoService' },
-            {
-                echo(s: string) {
-                    return s;
-                },
-            },
-        );
-
-        const proxy = main.apiProxy<EchoService>(Promise.resolve({ id: 'main' }), { id: 'echoService' });
-
-        const res = await proxy.echo('Yoo!');
-
-        expect(res).to.be.equal('Yoo!');
-    });
-
-    it('multi communication', async () => {
-        const host = new BaseHost();
-        const eventEmitter = new EventEmitter<{
-            message: Message;
-        }>();
-        const host2 = new EventEmitterHost(eventEmitter);
-
-        const main = new Communication(host, 'main');
-        const main2 = new Communication(host2, 'main2');
-
-        main.registerEnv('main2', host2);
-        main2.registerAPI(
-            { id: 'echoService' },
-            {
-                echo(s: string) {
-                    return s;
-                },
-            },
-        );
-
-        main2.registerEnv('main', host);
-        const proxy = main.apiProxy<EchoService>(Promise.resolve({ id: 'main2' }), { id: 'echoService' });
-
-        const res = await proxy.echo('Yoo!');
-
-        expect(res).to.be.equal('Yoo!');
-    });
-
-    /**
-     * This test is verifying special case when apiProxy is returned form async function
-     * in case of async function, js runtime tries to understand
-     * if returned from async function value is thenable or not. To do this, it checks if value has `then` method.
-     * Because we are using `Proxy` object under the hood, we have to ignore calls to `then` function,
-     * so js runtime understand that our proxy is not thenable object.
-     */
-    it('allows generate apiProxy in async function call', async () => {
-        const host = new BaseHost();
-        const main = new Communication(host, 'main');
-
-        const host2 = host.open();
-        const main2 = new Communication(host2, 'main2');
-
-        main.registerEnv('main2', host2);
-        main2.registerAPI(
-            { id: 'echoService' },
-            {
-                echo(s: string) {
-                    return s;
-                },
-            },
-        );
-
-        const getProxy = async () => {
-            await Promise.resolve();
-            return main.apiProxy<EchoService>({ id: 'main2' }, { id: 'echoService' });
-        };
-        const proxy = await getProxy();
-
-        const res = await proxy.echo('Yoo!');
-        expect(res).to.be.equal('Yoo!');
     });
 });
 

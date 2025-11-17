@@ -1,4 +1,4 @@
-import { Feature, Service } from '@wixc3/engine-core';
+import { Feature, Service } from '@dazl/engine-core';
 import BaseApp, { server } from '@fixture/base-web-application-feature/dist/base-web-application.feature.js';
 
 export default class ExternalFeature extends Feature<'externalFeature'> {

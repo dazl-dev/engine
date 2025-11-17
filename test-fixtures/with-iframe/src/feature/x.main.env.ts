@@ -1,4 +1,4 @@
-import { iframeInitializer } from '@wixc3/engine-core';
+import { iframeInitializer } from '@dazl/engine-core';
 import { mainEnv, iframeEnv } from './x.feature.js';
 import sampleFeature from './x.feature.js';
 

@@ -1,5 +1,5 @@
 import Preview, { PREVIEW } from './compiler.feature.js';
-import { iframeInitializer } from '@wixc3/engine-core';
+import { iframeInitializer } from '@dazl/engine-core';
 import { MAIN } from '../code-editor/code-editor.feature.js';
 
 Preview.setup(MAIN, ({}, { playgroundCodeEditor: { sidebarSlot }, COM }) => {

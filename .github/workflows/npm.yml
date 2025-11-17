@@ -1,20 +1,20 @@
 name: npm
 on:
   push:
-    branches: [master]
+    branches: [main]
 jobs:
   npm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           registry-url: 'https://registry.npmjs.org/'
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npx pleb@7 publish
+      - run: npx pleb@8 publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

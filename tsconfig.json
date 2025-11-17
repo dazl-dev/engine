@@ -7,15 +7,11 @@
 
     { "path": "./packages/runtime-node/src" },
     { "path": "./packages/runtime-node/test" },
+    { "path": "./packages/runtime-node/test-kit" },
 
     { "path": "./packages/engine-cli/src" },
     { "path": "./packages/engine-cli/test" },
 
-    { "path": "./packages/test-kit/src" },
-    { "path": "./packages/test-kit/test" },
-
-    { "path": "./examples/file-server/src" },
-    { "path": "./examples/multi-env/src" },
     { "path": "./examples/cross-iframe/src" },
     { "path": "./examples/node-only/src" },
     { "path": "./examples/playground/src" },
@@ -32,7 +28,6 @@
     { "path": "./test-fixtures/engine-multi-feature/src" },
     { "path": "./test-fixtures/engine-run-options/src" },
     { "path": "./test-fixtures/engine-env-dependency/src" },
-    { "path": "./test-fixtures/multi-node/src" },
     { "path": "./test-fixtures/multi-socket-node/src" },
     { "path": "./test-fixtures/default-args-echo/src" },
     { "path": "./test-fixtures/node-env/src" },
@@ -43,7 +38,6 @@
     { "path": "./test-fixtures/with-iframe/src" },
     { "path": "./test-fixtures/workspace/packages/a/src" },
     { "path": "./test-fixtures/workspace/packages/b/src" },
-    { "path": "./test-fixtures/disconnecting-env/src" },
-    { "path": "./test-fixtures/worker-thread/src" }
+    { "path": "./test-fixtures/disconnecting-env/src" }
   ]
 }

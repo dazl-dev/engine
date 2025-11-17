@@ -2,7 +2,7 @@ import type {
     UniversalMessageHandler,
     UniversalWorker,
     UniversalWorkerUserMethods,
-} from '@wixc3/isomorphic-worker/types';
+} from '@dazl/isomorphic-worker/types';
 import { type Target } from '../types.js';
 
 export class UniversalWorkerHost implements Target {

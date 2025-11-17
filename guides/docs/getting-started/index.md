@@ -24,13 +24,13 @@ npm install typescript -D
 
 In your blank typescript repo:
 
-1. install engine-core package `npm i @wixc3/engine-core`
-2. install engine-cli as a dev dependency `npm i -D @wixc3/engine-cli`
+1. install engine-core package `npm i @dazl/engine-core`
+2. install engine-cli as a dev dependency `npm i -D @dazl/engine-cli`
 3. if this is a typescript project, in the root of the project create an `engine.config.js` file, and inside we should
    add one of the following:
 
 ```ts
-/** @type {import('@wixc3/engine-cli').EngineConfig} */
+/** @type {import('@dazl/engine-cli').EngineConfig} */
 export default {
   // the folder where the transpiled js files will be located
   featureDiscoveryRoot: 'dist',
@@ -70,7 +70,7 @@ b. hello-world.my-env.env.ts
 Let's paste these contents to the file
 
 ```ts
-import { Feature, Environment } from '@wixc3/engine-core';
+import { Feature, Environment } from '@dazl/engine-core';
 
 // this is the environment in which this feature will set itself up
 export const myEnv = new Environment('my-env', 'node', 'single');

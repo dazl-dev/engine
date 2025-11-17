@@ -2,14 +2,15 @@ import { loadEngineConfig, runEngine } from './engine-build.js';
 import { resolveRuntimeOptions } from './resolve-runtime-options.js';
 import { runLocalNodeManager } from './run-local-mode-manager.js';
 import isCI from 'is-ci';
-import type { IExecutableApplication, IFeatureTarget } from './types.js';
+import type {
+    ConfigurationEnvironmentMapping,
+    FeatureEnvironmentMapping,
+    IExecutableApplication,
+    IFeatureTarget,
+} from './types.js';
 import { join } from 'path';
-import {
-    type ConfigurationEnvironmentMapping,
-    type FeatureEnvironmentMapping,
-    readMetadataFiles,
-} from '@wixc3/engine-runtime-node';
 import { checkWatchSignal } from './watch-signal.js';
+import { readMetadataFiles } from './metadata-files.js';
 
 export const OUTPUT_PATH = process.env.ENGINE_OUTPUT_PATH || join(process.cwd(), 'dist-engine');
 
@@ -89,7 +90,6 @@ export class ManagedRunEngine implements IExecutableApplication {
 
         const { port, manager } = await runLocalNodeManager(
             this.runMetadata.featureEnvironmentsMapping,
-            this.runMetadata.configMapping,
             execRuntimeOptions,
             OUTPUT_PATH,
         );

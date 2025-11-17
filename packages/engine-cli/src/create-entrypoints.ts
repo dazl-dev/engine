@@ -1,11 +1,11 @@
-import { TopLevelConfig } from '@wixc3/engine-core';
-import {
+import { TopLevelConfig } from '@dazl/engine-core';
+import { SetMultiMap } from '@dazl/patterns';
+import type {
     ConfigurationEnvironmentMapping,
     FeatureEnvironmentMapping,
     IConfigDefinition,
-} from '@wixc3/engine-runtime-node';
-import { SetMultiMap } from '@wixc3/patterns';
-import type { IFeatureDefinition } from './types.js';
+    IFeatureDefinition,
+} from './types.js';
 import type { getResolvedEnvironments } from './environments.js';
 import { createNodeEntrypoint, createNodeEnvironmentManagerEntrypoint } from './entrypoint/create-node-entrypoint.js';
 import { createMainEntrypoint } from './entrypoint/create-web-entrypoint.js';

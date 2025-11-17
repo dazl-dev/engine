@@ -1,4 +1,4 @@
-import { socketClientInitializer, webWorkerInitializer, initializeContextualEnv } from '@wixc3/engine-core';
+import { socketClientInitializer, webWorkerInitializer, initializeContextualEnv } from '@dazl/engine-core';
 import { contextualEnv, mainEnv } from './some-feature.feature.js';
 import sampleFeature from './some-feature.feature.js';
 

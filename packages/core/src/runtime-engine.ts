@@ -135,7 +135,7 @@ export class RuntimeEngine<ENV extends AnyEnvironment = AnyEnvironment> {
                             1000
                         ).toFixed(2)}s`,
                     );
-                }, 50);
+                }, 5000);
                 try {
                     await timeout(
                         feature.dispose(),

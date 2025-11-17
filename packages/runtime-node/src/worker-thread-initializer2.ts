@@ -1,20 +1,20 @@
-import { IRunOptions, InitializerOptions, UniversalWorkerHost } from '@wixc3/engine-core';
-import { Worker } from '@wixc3/isomorphic-worker/worker';
-import { type UniversalWorkerOptions } from '@wixc3/isomorphic-worker/types';
-import { createDisposables } from '@wixc3/patterns';
-import { PerformanceMetrics } from './types.js';
+import { AnyEnvironment, Communication, IRunOptions, UniversalWorkerHost } from '@dazl/engine-core';
+import { Worker } from '@dazl/isomorphic-worker/worker';
+import { type UniversalWorkerOptions } from '@dazl/isomorphic-worker/types';
+import { createDisposables } from '@dazl/patterns';
 import { getMetricsFromWorker } from './metrics-utils.js';
+import { rpcCall } from './micro-rpc.js';
+import type { RunningNodeEnvironment } from './node-env-manager.js';
 
-export interface WorkerThreadInitializer2 {
-    id: string;
-    dispose: () => Promise<void>;
+export interface WorkerThreadInitializer2 extends RunningNodeEnvironment {
     initialize: () => Promise<void>;
-    getMetrics(): Promise<PerformanceMetrics>;
 }
 
-export interface WorkerThreadInitializerOptions2 extends InitializerOptions {
+export interface WorkerThreadInitializerOptions2 {
     workerURL: URL;
     runtimeOptions?: IRunOptions;
+    env: Pick<AnyEnvironment, 'env' | 'endpointType'>;
+    communication: Communication;
 }
 
 export function runWorker(instanceId: string, workerURL: URL, runtimeOptions?: IRunOptions) {
@@ -47,7 +47,23 @@ export function workerThreadInitializer2({
             execArgv: process.execArgv,
         } as UniversalWorkerOptions);
 
-        disposables.add('terminate worker', () => worker.terminate());
+        disposables.add({
+            name: 'terminate worker',
+            dispose: async () => {
+                if (process.env.ENGINE_GRACEFUL_TERMINATION !== 'false') {
+                    try {
+                        await rpcCall(worker, 'terminate', 15000);
+                    } catch (e) {
+                        console.error(
+                            `failed terminating environment gracefully ${instanceId}, terminating worker.`,
+                            e,
+                        );
+                    }
+                }
+                await worker.terminate();
+            },
+            timeout: 20_000,
+        });
 
         const host = new UniversalWorkerHost(worker, instanceId);
         communication.registerEnv(instanceId, host);

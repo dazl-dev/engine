@@ -1,5 +1,5 @@
-import { isPlainObject, concat, isMap, isSet, reduce } from '@wixc3/common';
-import { isSetMultiMap, SetMultiMap } from '@wixc3/patterns';
+import { isPlainObject, concat, isMap, isSet, reduce } from '@dazl/common';
+import { isSetMultiMap, SetMultiMap } from '@dazl/patterns';
 
 export const mergeAll = <T>(results: Iterable<T>): T =>
     reduce(

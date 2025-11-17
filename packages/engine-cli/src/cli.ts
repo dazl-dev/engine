@@ -62,6 +62,11 @@ async function engine() {
             description: 'Run the application',
             default: undefined,
         },
+        customEntrypoints: {
+            type: String,
+            description: 'Custom entrypoint. this feature disable feature analysis',
+            default: undefined,
+        },
         forceAnalyze: {
             type: Boolean,
             description: 'Force analyze features',

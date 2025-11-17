@@ -40,7 +40,12 @@ export async function launchEngineHttpServer({
         app.use(path, handlers);
     }
     app.use(cors());
-    const { port, httpServer } = await safeListeningHttpServer(httpServerPort, app, 100, hostname);
+    const { port, httpServer } = await safeListeningHttpServer(
+        httpServerPort,
+        app as import('http').RequestListener,
+        100,
+        hostname,
+    );
 
     if (staticDirPath) {
         app.use('/', express.static(staticDirPath));
@@ -60,9 +65,9 @@ export async function launchEngineHttpServer({
     });
 
     return {
-        close: async () => {
+        close: () => {
             httpServer.closeAllConnections();
-            await socketServer.close();
+            return socketServer.close();
         },
         port,
         app,

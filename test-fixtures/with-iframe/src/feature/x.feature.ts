@@ -1,4 +1,4 @@
-import { COM, Environment, Feature, Service } from '@wixc3/engine-core';
+import { COM, Environment, Feature, Service } from '@dazl/engine-core';
 export const mainEnv = new Environment('main', 'window', 'single');
 export const iframeEnv = new Environment('iframe', 'iframe', 'single');
 

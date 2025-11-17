@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { getEngineEntryOptions, IRunOptions } from '@wixc3/engine-core';
+import { getEngineEntryOptions, IRunOptions } from '@dazl/engine-core';
 
 describe('helpers', () => {
     describe('getEngineEntryOptions', () => {
