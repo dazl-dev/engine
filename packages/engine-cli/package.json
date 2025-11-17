@@ -1,6 +1,6 @@
 {
   "name": "@dazl/engine-cli",
-  "version": "51.3.1-alpha.1",
+  "version": "51.3.1-alpha.2",
   "type": "module",
   "bin": {
     "engine": "./bin/engine.js"
@@ -15,8 +15,8 @@
     "./default-config-loader": "./dist/entrypoint/default-config-loader.js"
   },
   "dependencies": {
-    "@dazl/engine-core": "^51.3.1-alpha.1",
-    "@dazl/engine-runtime-node": "^51.3.1-alpha.1",
+    "@dazl/engine-core": "^51.3.1-alpha.2",
+    "@dazl/engine-runtime-node": "^51.3.1-alpha.2",
     "@dazl/patterns": "^18.5.1",
     "@dazl/resolve-directory-context": "^5.1.0",
     "@file-services/node": "^11.0.1",
