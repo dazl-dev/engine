@@ -1,6 +1,6 @@
 {
   "name": "@example/node-only",
-  "version": "51.3.0",
+  "version": "51.4.0",
   "private": true,
   "type": "module",
   "main": "index.js",

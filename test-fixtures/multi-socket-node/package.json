@@ -1,6 +1,6 @@
 {
   "name": "@fixture/engine-multi-socket-node",
-  "version": "51.3.0",
+  "version": "51.4.0",
   "private": true,
   "type": "module"
 }
