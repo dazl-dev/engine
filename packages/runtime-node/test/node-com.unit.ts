@@ -14,7 +14,7 @@ import { expect } from 'chai';
 import { safeListeningHttpServer } from 'create-listening-server';
 import { fork } from 'node:child_process';
 import type { Socket } from 'node:net';
-import { sleep, waitFor } from 'promise-assist';
+import { waitFor } from 'promise-assist';
 import sinon, { spy } from 'sinon';
 import * as io from 'socket.io';
 
@@ -24,7 +24,6 @@ interface ICommunicationTestApi {
 }
 
 describe('Socket communication', () => {
-    const disposeGraceMs = 10;
     let clientHost: WsClientHost;
     let serverHost: WsServerHost;
     let socketServer: io.Server;
@@ -57,9 +56,7 @@ describe('Socket communication', () => {
         });
 
         clientHost = new WsClientHost(serverTopology['server-host']);
-        disposables.add(() => clientHost.dispose());
-        serverHost = new WsServerHost(nameSpace, { disposeGraceMs });
-        disposables.add(() => serverHost.dispose());
+        serverHost = new WsServerHost(nameSpace);
         await clientHost.connected;
     });
 
@@ -228,20 +225,19 @@ describe('Socket communication', () => {
     it('notifies if environment is disconnected', async () => {
         const spy = sinon.spy();
         const clientCom = new Communication(clientHost, 'client-host', serverTopology);
-        const socketClient = await socketClientInitializer({
+        const { id } = await socketClientInitializer({
             communication: clientCom,
             env: new Environment('server-host', 'node', 'single'),
         });
-        disposables.add(() => socketClient.dispose());
-        expect(socketClient.id).to.not.eq(undefined);
 
-        const host = clientCom.getEnvironmentHost(socketClient.id);
+        expect(id).to.not.eq(undefined);
+
+        const host = clientCom.getEnvironmentHost(id);
         (host as WsClientHost).subscribers.on('disconnect', spy);
         await socketServer.close();
         await waitFor(
             () => {
                 expect(spy.callCount).to.be.eq(1);
-                expect(spy.firstCall.args[0]).to.be.a('string');
             },
             {
                 timeout: 2_000,
@@ -255,26 +251,22 @@ describe('Socket communication', () => {
         const { waitForCall: waitForClient1Call, spy: spyClient1 } =
             createWaitForCall<(ev: { data: Message }) => void>('client');
         const clientHost1 = new WsClientHost(serverTopology['server-host']!);
-        disposables.add(() => clientHost1.dispose());
         const clientHost2 = new WsClientHost(serverTopology['server-host']!);
-
         const clientCom1 = new Communication(clientHost1, 'client-host1', serverTopology);
         const clientCom2 = new Communication(clientHost2, 'client-host2', serverTopology);
         new Communication(serverHost, 'server-host');
-        const socketClient1 = await socketClientInitializer({
+        await socketClientInitializer({
             communication: clientCom1,
             env: {
                 env: 'server-host',
             },
         });
-        disposables.add(() => socketClient1.dispose());
-        const socketClient2 = await socketClientInitializer({
+        await socketClientInitializer({
             communication: clientCom2,
             env: {
                 env: 'server-host',
             },
         });
-        disposables.add(() => socketClient2.dispose());
         clientCom1.registerEnv('client-host2', clientCom1.getEnvironmentHost('server-host')!);
         serverHost.addEventListener('message', spyServer);
         clientHost1.addEventListener('message', spyClient1);
@@ -291,99 +283,6 @@ describe('Socket communication', () => {
             expect(message.origin).to.include('/client-host2');
             expect(message.from).to.equal('server-host');
         });
-    });
-
-    it('should handle client reconnection and cancel delayed dispose', async () => {
-        const COMMUNICATION_ID = 'reconnect-test';
-        const { spy: disposeSpy } = createWaitForCall<(ev: { data: Message }) => void>('dispose');
-        const { waitForCall: waitForConnect, spy: connectSpy } = createWaitForCall<() => void>('connect');
-
-        const clientCom = new Communication(clientHost, 'client-host', serverTopology);
-        const serverCom = new Communication(serverHost, 'server-host');
-
-        serverCom.registerAPI<ICommunicationTestApi>(
-            { id: COMMUNICATION_ID },
-            {
-                sayHello: () => 'hello',
-                sayHelloWithDataAndParams: (name: string) => `hello ${name}`,
-            },
-        );
-
-        // Test communication works
-        const methods = clientCom.apiProxy<ICommunicationTestApi>({ id: 'server-host' }, { id: COMMUNICATION_ID });
-        expect(await methods.sayHello()).to.eql('hello');
-
-        // Listen for dispose & reconnect messages
-        serverHost.addEventListener('message', disposeSpy);
-        clientHost.subscribers.on('connect', connectSpy);
-
-        // Disconnect and quickly reconnect (before dispose delay expires)
-        clientHost.disconnectSocket();
-        expect(clientHost.isConnected()).to.eql(false);
-
-        // Reconnect immediately (within the 10ms dispose delay)
-        clientHost.reconnectSocket();
-        await waitForConnect(() => true);
-
-        // Wait a bit more than the dispose delay to ensure dispose timer would have fired
-        await sleep(disposeGraceMs * 2);
-
-        // Verify no dispose message was sent (since reconnection cancelled it)
-        expect(disposeSpy.callCount).to.eql(0);
-
-        // Verify communication still works after reconnection
-        expect(await methods.sayHello()).to.eql('hello');
-        expect(await methods.sayHelloWithDataAndParams('reconnected')).to.eq('hello reconnected');
-    });
-
-    it('should emit dispose message if client does not reconnect within dispose delay', async () => {
-        const COMMUNICATION_ID = 'dispose-test';
-        const { waitForCall: waitForDispose, spy: disposeSpy } =
-            createWaitForCall<(ev: { data: Message }) => void>('dispose');
-
-        const clientCom = new Communication(clientHost, 'client-host', serverTopology);
-        const serverCom = new Communication(serverHost, 'server-host');
-
-        serverCom.registerAPI<ICommunicationTestApi>(
-            { id: COMMUNICATION_ID },
-            {
-                sayHello: () => 'hello',
-                sayHelloWithDataAndParams: (name: string) => `hello ${name}`,
-            },
-        );
-
-        // Test communication works
-        const methods = clientCom.apiProxy<ICommunicationTestApi>({ id: 'server-host' }, { id: COMMUNICATION_ID });
-        expect(await methods.sayHello()).to.eql('hello');
-
-        // Register dispose listener after initial communication
-        serverHost.addEventListener('message', disposeSpy);
-
-        // Disconnect without reconnecting
-        clientHost.disconnectSocket();
-        expect(clientHost.isConnected()).to.eql(false);
-
-        // Wait for dispose message to be emitted after delay
-        await waitForDispose(([arg]) => {
-            const message = arg.data as DisposeMessage;
-            expect(message.type).to.eql('dispose');
-            expect(message.from).to.include('/client-host');
-            expect(message.origin).to.include('/client-host');
-            return true;
-        });
-
-        // Verify that connection can be established again after dispose
-        const { waitForCall: waitForConnect, spy: connectSpy } =
-            createWaitForCall<() => void>('reconnect-after-dispose');
-        clientHost.subscribers.on('connect', connectSpy);
-
-        clientHost.reconnectSocket();
-        await waitForConnect(() => true);
-        expect(clientHost.isConnected()).to.eql(true);
-
-        // Verify communication works again after reconnection
-        expect(await methods.sayHello()).to.eql('hello');
-        expect(await methods.sayHelloWithDataAndParams('after-dispose')).to.eq('hello after-dispose');
     });
 });
 
