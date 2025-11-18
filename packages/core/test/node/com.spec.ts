@@ -11,7 +11,7 @@ import {
     Slot,
     declareComEmitter,
     multiTenantMethod,
-    ValueSignal,
+    RemoteValue,
 } from '@dazl/engine-core';
 import * as chai from 'chai';
 import { expect } from 'chai';
@@ -57,7 +57,7 @@ describe('Communication', () => {
 
     it('signal support', async () => {
         class EchoServiceWithSignal {
-            onChange = new ValueSignal<string>('');
+            onChange = new RemoteValue<string>('');
             echo(s: string) {
                 return s;
             }

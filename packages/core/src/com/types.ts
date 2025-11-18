@@ -1,5 +1,5 @@
 import { SERVICE_CONFIG } from '../symbols.js';
-import { RemotelyAccessibleSignalMethods, ValueSignal } from '../value-signal.js';
+import { AsyncRemoteValue, RemoteValue } from '../value-signal.js';
 import { Message } from './message-types.js';
 
 export type SerializableArguments = unknown[];
@@ -65,8 +65,8 @@ export type AsyncApi<T extends object> = {
           ? T[P]
           : T[P] extends (...args: infer Args) => infer R
             ? (...args: Args) => Promise<R>
-            : T[P] extends ValueSignal<any>
-              ? Pick<T[P], RemotelyAccessibleSignalMethods>
+            : T[P] extends RemoteValue<infer X>
+              ? AsyncRemoteValue<X>
               : never;
 } & {
     [K in Extract<keyof T, keyof object>]: never;
@@ -121,5 +121,5 @@ export interface APIService {
 }
 
 export interface RemoteAPIServicesMapping {
-    [remoteServiceId: string]: Record<string, AnyFunction | { subscribe: AnyFunction; unsubscribe: AnyFunction }>;
+    [remoteServiceId: string]: Record<string, AnyFunction | AsyncRemoteValue<any>>;
 }

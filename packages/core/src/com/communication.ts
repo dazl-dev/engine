@@ -56,7 +56,7 @@ import {
     UnConfiguredMethodError,
     UnknownCallbackIdError,
 } from './communication-errors.js';
-import { ValueSignal } from '../value-signal.js';
+import { RemoteValue } from '../value-signal.js';
 
 export interface ConfigEnvironmentRecord extends EnvironmentRecord {
     registerMessageHandler?: boolean;
@@ -225,52 +225,85 @@ export class Communication {
                                 serviceComConfig as Record<string, AnyServiceMethodOptions>,
                             );
                         //////////// Signal handling ////////////
-                        const subSignalId = key + '.' + 'subscribe';
-                        const unsubSignalId = key + '.' + 'unsubscribe';
-                        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[subSignalId] = {
-                            emitOnly: true,
-                            listener: true,
-                        };
-                        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[unsubSignalId] = {
-                            emitOnly: true,
-                            removeListener: subSignalId,
-                        };
-                        runtimeValue.subscribe = async (fn: UnknownFunction) => {
-                            return this.callMethod(
-                                (await instanceToken).id,
-                                api,
-                                subSignalId,
-                                [fn],
-                                this.rootEnvId,
-                                serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                            );
-                        };
-                        runtimeValue.unsubscribe = async (fn: UnknownFunction) => {
-                            return this.callMethod(
-                                (await instanceToken).id,
-                                api,
-                                unsubSignalId,
-                                [fn],
-                                this.rootEnvId,
-                                serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                            );
-                        };
-                        runtimeValue.getValue = async () => {
-                            return this.callMethod(
-                                (await instanceToken).id,
-                                api,
-                                key + '.getValue',
-                                [],
-                                this.rootEnvId,
-                                serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                            );
-                        };
-                        runtimeCache[key] = runtimeValue;
+                        runtimeCache[key] = Object.assign(
+                            runtimeValue,
+                            this.createAsyncRemoteValue<T>(key, serviceComConfig, instanceToken, api),
+                        );
                     }
                     return runtimeValue;
                 }
             },
         });
+    }
+
+    private createAsyncRemoteValue<T extends object>(
+        key: string,
+        serviceComConfig: ServiceComConfig<T>,
+        instanceToken: EnvironmentInstanceToken | Promise<EnvironmentInstanceToken>,
+        api: string,
+    ) {
+        const subSignalId = key + '.' + 'subscribe';
+        const unsubSignalId = key + '.' + 'unsubscribe';
+        const streamSignalId = key + '.' + 'stream';
+        const getValueId = key + '.getValue';
+
+        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[subSignalId] = {
+            emitOnly: true,
+            listener: true,
+        };
+        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[unsubSignalId] = {
+            emitOnly: true,
+            removeListener: subSignalId,
+        };
+        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[streamSignalId] = {
+            emitOnly: true,
+            listener: true,
+        };
+
+        const asyncRemoteValue = {
+            subscribe: async (...args: unknown[]) => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    subSignalId,
+                    args,
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+            unsubscribe: async (fn: UnknownFunction) => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    unsubSignalId,
+                    [fn],
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+            stream: async (fn: UnknownFunction) => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    streamSignalId,
+                    [fn],
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+            getValue: async () => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    getValueId,
+                    [],
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+        };
+
+        return asyncRemoteValue;
     }
 
     /**
@@ -685,8 +718,11 @@ export class Communication {
             return (this.apisOverrides[api][method] as UnknownFunction)(...[origin, ...args]);
         }
         if (method.includes('.')) {
-            const [apiName, methodName] = method.split('.') as [string, 'subscribe' | 'unsubscribe' | 'getValue'];
-            const signal = this.apis[api]![apiName] as ValueSignal<unknown>;
+            const [apiName, methodName] = method.split('.') as [
+                string,
+                'subscribe' | 'unsubscribe' | 'getValue' | 'stream',
+            ];
+            const signal = this.apis[api]![apiName] as RemoteValue<unknown>;
             const fnAsrgs = args as [UnknownFunction];
             return signal[methodName](...fnAsrgs);
         }
