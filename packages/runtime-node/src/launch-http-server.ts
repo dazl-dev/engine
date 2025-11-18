@@ -55,8 +55,8 @@ export async function launchEngineHttpServer({
 
     const socketServer = new io.Server(httpServer, {
         cors: {},
-        pingTimeout: 30 * 1000 * 60, // 30 minutes. our sockets does not run over network.
-        pingInterval: 10 * 1000 * 60, // 10 minutes. our sockets does not run over network.
+        pingTimeout: 1000 * 3, // 3 seconds. our sockets does not run over network.
+        pingInterval: 1000 * 3, // 3 seconds. our sockets does not run over network.
         httpCompression: false,
         serveClient: false,
         maxHttpBufferSize: 1e8, // 100 MB

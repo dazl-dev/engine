@@ -87,6 +87,12 @@ export class WsClientHost extends BaseHost implements IDisposable {
                 this.subscribers.emit(data, undefined);
                 return;
             }
+
+            // Log server-info messages
+            if (typeof data === 'object' && data !== null && 'type' in data && data.type === 'server-info') {
+                console.log('[WS Dev] Server Info Received:', data);
+            }
+
             this.emitMessageHandlers(data as Message);
         });
 
@@ -99,6 +105,56 @@ export class WsClientHost extends BaseHost implements IDisposable {
         });
 
         this.socketClient.connect();
+
+        // Inject dev button for testing
+        this.injectDevButton();
+    }
+
+    private injectDevButton() {
+        if (typeof document === 'undefined') return;
+
+        const button = document.createElement('button');
+        button.textContent = '🔧 Get Server Info';
+        button.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            padding: 10px 15px;
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        `;
+
+        button.addEventListener('mouseenter', () => {
+            button.style.background = '#4f46e5';
+            button.style.transform = 'translateY(-2px)';
+            button.style.boxShadow = '0 6px 8px rgba(0,0,0,0.15)';
+        });
+
+        button.addEventListener('mouseleave', () => {
+            button.style.background = '#6366f1';
+            button.style.transform = 'translateY(0)';
+            button.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+        });
+
+        button.addEventListener('click', () => {
+            console.log('[WS Dev] Sending "givemeinfo" message...');
+            this.socketClient.emit('message', 'givemeinfo');
+        });
+
+        document.body.appendChild(button);
+
+        // Clean up button on dispose
+        this.disposables.add('remove dev button', () => {
+            button.remove();
+        });
     }
 
     public postMessage(data: any) {
