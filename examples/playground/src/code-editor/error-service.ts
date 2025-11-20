@@ -1,7 +1,7 @@
 export class ErrorService {
     private errors: string[] = [];
     private handlers: Array<() => void> = [];
-    public reportError(error: string) {
+    public report(error: string) {
         this.errors.push(error);
         this.handlers.forEach((fn) => fn());
     }

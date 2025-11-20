@@ -9,7 +9,7 @@ CodeEditor.setup(PROCESSING, ({ run, remoteCodeService, errorService }, {}) => {
         await remoteCodeService.listen(async () => {
             codeService.setContent(await remoteCodeService.getContent());
             if (codeService.getContent().includes('s')) {
-                await errorService.reportError('`s` is not allowed!');
+                await errorService.report('`s` is not allowed!');
             }
         });
     });

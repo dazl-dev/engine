@@ -6,7 +6,6 @@ import { SERVICE_CONFIG } from '../symbols.js';
 import { type IDTag } from '../types.js';
 import {
     REMOTE_CALL_FAILED,
-    reportError,
     AUTO_REGISTER_ENVIRONMENT,
     FORWARDING_MESSAGE,
     MESSAGE_FROM_UNKNOWN_ENVIRONMENT,
@@ -948,7 +947,7 @@ export class Communication {
     }
 
     private handleEvent = ({ data, source }: { data: Message; source: Target }): void => {
-        this.handleMessage(data, source).catch(reportError);
+        this.handleMessage(data, source).catch(console.error);
     };
 
     private getHandlerId(envId: string, api: string, method: string) {
