@@ -17,7 +17,7 @@
   "dependencies": {
     "@dazl/engine-core": "^51.4.0",
     "@dazl/engine-runtime-node": "^51.4.0",
-    "@dazl/patterns": "^18.5.1",
+    "@dazl/patterns": "^18.6.0",
     "@dazl/resolve-directory-context": "^5.1.0",
     "@file-services/node": "^11.0.1",
     "@file-services/resolve": "^11.0.1",

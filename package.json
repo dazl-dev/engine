@@ -23,7 +23,7 @@
     "prettify": "prettier . --write"
   },
   "devDependencies": {
-    "@dazl/create-disposables": "^18.5.1",
+    "@dazl/create-disposables": "^18.6.0",
     "@file-services/memory": "^11.0.1",
     "@file-services/types": "^11.0.1",
     "@playwright/browser-chromium": "^1.56.1",
@@ -39,7 +39,7 @@
     "@types/sinon": "^21.0.0",
     "@types/sinon-chai": "^4.0.0",
     "@types/yargs": "^17.0.35",
-    "@dazl/wait-for-call": "^18.5.1",
+    "@dazl/wait-for-call": "^18.6.0",
     "chai": "^6.2.1",
     "chai-as-promised": "^8.0.2",
     "create-temp-directory": "^2.4.0",
@@ -50,7 +50,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "mocha": "^11.7.5",
-    "mocha-web": "^2.5.0",
+    "mocha-web": "^2.5.1",
     "prettier": "^3.6.2",
     "promise-assist": "^2.0.1",
     "react": "^19.2.0",
