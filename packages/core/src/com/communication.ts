@@ -243,6 +243,7 @@ export class Communication {
         const unsubSignalId = key + '.' + 'unsubscribe';
         const streamSignalId = key + '.' + 'stream';
         const getValueId = key + '.getValue';
+        const reconnectId = key + '.reconnect';
 
         (serviceComConfig as Record<string, AnyServiceMethodOptions>)[subSignalId] = {
             emitOnly: true,
@@ -294,6 +295,16 @@ export class Communication {
                     api,
                     getValueId,
                     [],
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+            reconnect: async (currentVersion: number) => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    reconnectId,
+                    [currentVersion],
                     this.rootEnvId,
                     serviceComConfig as Record<string, AnyServiceMethodOptions>,
                 );
@@ -719,10 +730,9 @@ export class Communication {
             subActions.length === 1 &&
             remoteValueAsyncMethods.has(subActions[0] as RemoteValueAsyncMethods)
         ) {
-            const remoteValue = this.apis[api]![apiName] as RemoteValue<unknown>;
+            const remoteValue = this.apis[api]![apiName] as unknown as RemoteValue<unknown>;
             const methodName = subActions[0] as RemoteValueAsyncMethods;
-            const fnArgs = args as [UnknownFunction];
-            return remoteValue[methodName](...fnArgs);
+            return (remoteValue[methodName] as UnknownFunction)(...args);
         }
         //
         return (this.apis[api]![callPath] as UnknownFunction)(...args);

@@ -73,9 +73,9 @@ describe('Communication', () => {
         }
 
         function createEventCollector<T>() {
-            const events: Array<{ value: T }> = [];
-            const handler = (value: T) => {
-                events.push({ value });
+            const events: Array<{ value: T; version: number }> = [];
+            const handler = (value: T, version: number) => {
+                events.push({ value, version });
             };
             return { events, handler };
         }
@@ -96,7 +96,7 @@ describe('Communication', () => {
             service.counter.setValueAndNotify(1);
             await waitOneTickAfter();
 
-            expect(events, 'event with change').to.eql([{ value: 1 }]);
+            expect(events, 'event with change').to.eql([{ value: 1, version: 1 }]);
 
             proxy.counter.unsubscribe(handler);
             await waitOneTickAfter();
@@ -104,7 +104,7 @@ describe('Communication', () => {
             service.counter.setValueAndNotify(2);
             await waitOneTickAfter();
 
-            expect(events, 'no new events after unsubscribe').to.eql([{ value: 1 }]);
+            expect(events, 'no new events after unsubscribe').to.eql([{ value: 1, version: 1 }]);
         });
         it('should stream current value immediately (subscribe+fetch)', async () => {
             const { comMain, comChild } = setupCrossEnvCommunication();
@@ -117,12 +117,15 @@ describe('Communication', () => {
             proxy.counter.stream(handler);
             await waitOneTickAfter();
 
-            expect(events, 'immediate with initial value').to.eql([{ value: 5 }]);
+            expect(events, 'immediate with initial value').to.eql([{ value: 5, version: 0 }]);
 
             service.counter.setValueAndNotify(10);
             await waitOneTickAfter();
 
-            expect(events, 'initial + notify').to.eql([{ value: 5 }, { value: 10 }]);
+            expect(events, 'initial + notify').to.eql([
+                { value: 5, version: 0 },
+                { value: 10, version: 1 },
+            ]);
         });
         it('should get current value via getValue', async () => {
             const { comMain, comChild } = setupCrossEnvCommunication();
@@ -153,8 +156,34 @@ describe('Communication', () => {
             service.counter.setValueAndNotify(2);
             await waitOneTickAfter();
 
-            expect(collector1.events, 'collector1 events').to.eql([{ value: 1 }, { value: 2 }]);
-            expect(collector2.events, 'collector2 events').to.eql([{ value: 1 }, { value: 2 }]);
+            expect(collector1.events, 'collector1 events').to.eql([
+                { value: 1, version: 1 },
+                { value: 2, version: 2 },
+            ]);
+            expect(collector2.events, 'collector2 events').to.eql([
+                { value: 1, version: 1 },
+                { value: 2, version: 2 },
+            ]);
+        });
+        it('should track version increments across value changes', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(0) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const { events, handler } = createEventCollector<number>();
+
+            proxy.counter.subscribe(handler);
+            await waitOneTickAfter();
+
+            service.counter.setValueAndNotify(10);
+            await waitOneTickAfter();
+            service.counter.setValueAndNotify(20);
+            await waitOneTickAfter();
+            service.counter.setValueAndNotify(30);
+            await waitOneTickAfter();
+
+            expect(events.map((e) => e.version)).to.eql([1, 2, 3]);
         });
         it('should not notify when value does not change', async () => {
             const { comMain, comChild } = setupCrossEnvCommunication();
@@ -192,7 +221,32 @@ describe('Communication', () => {
             await waitOneTickAfter();
 
             expect(collector1.events, 'unsubscribed, no events').to.eql([]);
-            expect(collector2.events, 'still subscribed').to.eql([{ value: 1 }]);
+            expect(collector2.events, 'still subscribed').to.eql([{ value: 1, version: 1 }]);
+        });
+        it('should reconnect and sync version correctly', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(10) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+
+            // Initial version is 0, reconnect with matching version should return null
+            let result = await proxy.counter.reconnect(0);
+            expect(result, 'initial sync, versions match').to.eql(null);
+
+            // Update value multiple times
+            service.counter.setValueAndNotify(20);
+            await waitOneTickAfter();
+            service.counter.setValueAndNotify(30);
+            await waitOneTickAfter();
+
+            // Reconnect with old version should return latest value and version
+            result = await proxy.counter.reconnect(0);
+            expect(result, 'versions mismatch, return latest').to.eql({ value: 30, version: 2 });
+
+            // Reconnect with current version should return null
+            result = await proxy.counter.reconnect(2);
+            expect(result, 'versions match, no update needed').to.eql(null);
         });
     });
 
