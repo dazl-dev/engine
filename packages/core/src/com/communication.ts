@@ -55,6 +55,7 @@ import {
     UnConfiguredMethodError,
     UnknownCallbackIdError,
 } from './communication-errors.js';
+import { type RemoteValueAsyncMethods, type RemoteValue, remoteValueAsyncMethods } from '../remote-value.js';
 
 export interface ConfigEnvironmentRecord extends EnvironmentRecord {
     registerMessageHandler?: boolean;
@@ -196,9 +197,9 @@ export class Communication {
         serviceComConfig: ServiceComConfig<T> = {},
     ): AsyncApi<T> {
         return new Proxy(Object.create(null), {
-            get: (obj, method) => {
+            get: (runtimeCache, key) => {
                 // let js runtime know that this is not thenable object
-                if (method === 'then') {
+                if (key === 'then') {
                     return undefined;
                 }
 
@@ -207,27 +208,99 @@ export class Communication {
                  * they used by the debugger and cause messages to be sent everywhere
                  * this behavior made debugging very hard and can cause errors and infinite loops
                  */
-                if (Object.hasOwn(Object.prototype, method)) {
-                    return Reflect.get(Object.prototype, method);
+                if (Object.hasOwn(Object.prototype, key)) {
+                    return Reflect.get(Object.prototype, key);
                 }
-                if (typeof method === 'string') {
-                    let runtimeMethod = obj[method];
-                    if (!runtimeMethod) {
-                        runtimeMethod = async (...args: unknown[]) =>
+                if (typeof key === 'string') {
+                    let runtimeValue = runtimeCache[key];
+                    if (!runtimeValue) {
+                        runtimeValue = async (...args: unknown[]) =>
                             this.callMethod(
                                 (await instanceToken).id,
                                 api,
-                                method,
+                                key,
                                 args,
                                 this.rootEnvId,
                                 serviceComConfig as Record<string, AnyServiceMethodOptions>,
                             );
-                        obj[method] = runtimeMethod;
+                        runtimeCache[key] = Object.assign(
+                            runtimeValue,
+                            this.createAsyncRemoteValue<T>(key, serviceComConfig, instanceToken, api),
+                        );
                     }
-                    return runtimeMethod;
+                    return runtimeValue;
                 }
             },
         });
+    }
+    private createAsyncRemoteValue<T extends object>(
+        key: string,
+        serviceComConfig: ServiceComConfig<T>,
+        instanceToken: EnvironmentInstanceToken | Promise<EnvironmentInstanceToken>,
+        api: string,
+    ) {
+        const subSignalId = key + '.' + 'subscribe';
+        const unsubSignalId = key + '.' + 'unsubscribe';
+        const streamSignalId = key + '.' + 'stream';
+        const getValueId = key + '.getValue';
+
+        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[subSignalId] = {
+            emitOnly: true,
+            listener: true,
+        };
+        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[unsubSignalId] = {
+            emitOnly: true,
+            removeListener: subSignalId,
+        };
+        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[streamSignalId] = {
+            emitOnly: true,
+            listener: true,
+        };
+
+        const asyncRemoteValue = {
+            subscribe: async (...args: unknown[]) => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    subSignalId,
+                    args,
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+            unsubscribe: async (fn: UnknownFunction) => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    unsubSignalId,
+                    [fn],
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+            stream: async (fn: UnknownFunction) => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    streamSignalId,
+                    [fn],
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+            getValue: async () => {
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    getValueId,
+                    [],
+                    this.rootEnvId,
+                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
+                );
+            },
+        };
+
+        return asyncRemoteValue;
     }
 
     /**
@@ -634,11 +707,25 @@ export class Communication {
         this.post(env.host, message);
     }
 
-    private apiCall(origin: string, api: string, method: string, args: unknown[]): unknown {
-        if (this.apisOverrides[api]?.[method]) {
-            return this.apisOverrides[api][method](...[origin, ...args]);
+    private apiCall(origin: string, api: string, callPath: string, args: unknown[]): unknown {
+        const method = this.apisOverrides[api]?.[callPath];
+        if (typeof method === 'function') {
+            return method(...[origin, ...args]);
         }
-        return this.apis[api]![method]!(...args);
+        // support for RemoteValue
+        const [apiName, ...subActions] = callPath.split('.');
+        if (
+            apiName &&
+            subActions.length === 1 &&
+            remoteValueAsyncMethods.has(subActions[0] as RemoteValueAsyncMethods)
+        ) {
+            const remoteValue = this.apis[api]![apiName] as RemoteValue<unknown>;
+            const methodName = subActions[0] as RemoteValueAsyncMethods;
+            const fnArgs = args as [UnknownFunction];
+            return remoteValue[methodName](...fnArgs);
+        }
+        //
+        return (this.apis[api]![callPath] as UnknownFunction)(...args);
     }
 
     private unhandledMessage(message: Message): void {

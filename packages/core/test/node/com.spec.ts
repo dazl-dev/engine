@@ -5,6 +5,7 @@ import {
     Communication,
     Environment,
     Feature,
+    RemoteValue,
     RuntimeEngine,
     SERVICE_CONFIG,
     Service,
@@ -52,6 +53,147 @@ describe('Communication', () => {
         const res = await proxy.echo('Yoo!');
 
         expect(res).to.be.equal('Yoo!');
+    });
+
+    describe('RemoteValue', () => {
+        interface ServiceWithRemoteValue {
+            counter: RemoteValue<number>;
+        }
+
+        function setupCrossEnvCommunication() {
+            const hostMain = new BaseHost();
+            const hostChild = hostMain.open();
+            const comMain = new Communication(hostMain, 'main');
+            const comChild = new Communication(hostChild, 'child');
+
+            comMain.registerEnv('child', hostChild);
+            comChild.registerEnv('main', hostMain);
+
+            return { comMain, comChild, hostMain, hostChild };
+        }
+
+        function createEventCollector<T>() {
+            const events: Array<{ value: T }> = [];
+            const handler = (value: T) => {
+                events.push({ value });
+            };
+            return { events, handler };
+        }
+
+        const waitOneTickAfter = () => sleep(0);
+
+        it('should subscribe and unsubscribe to value changes', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(0) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const { events, handler } = createEventCollector<number>();
+
+            proxy.counter.subscribe(handler);
+            await waitOneTickAfter();
+
+            service.counter.setValueAndNotify(1);
+            await waitOneTickAfter();
+
+            expect(events, 'event with change').to.eql([{ value: 1 }]);
+
+            proxy.counter.unsubscribe(handler);
+            await waitOneTickAfter();
+
+            service.counter.setValueAndNotify(2);
+            await waitOneTickAfter();
+
+            expect(events, 'no new events after unsubscribe').to.eql([{ value: 1 }]);
+        });
+        it('should stream current value immediately (subscribe+fetch)', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(5) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const { events, handler } = createEventCollector<number>();
+
+            proxy.counter.stream(handler);
+            await waitOneTickAfter();
+
+            expect(events, 'immediate with initial value').to.eql([{ value: 5 }]);
+
+            service.counter.setValueAndNotify(10);
+            await waitOneTickAfter();
+
+            expect(events, 'initial + notify').to.eql([{ value: 5 }, { value: 10 }]);
+        });
+        it('should get current value via getValue', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(42) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+
+            const value = await proxy.counter.getValue();
+
+            expect(value).to.equal(42);
+        });
+        it('should support multiple subscribers receiving same updates', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(0) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const collector1 = createEventCollector<number>();
+            const collector2 = createEventCollector<number>();
+
+            proxy.counter.subscribe(collector1.handler);
+            proxy.counter.subscribe(collector2.handler);
+            await waitOneTickAfter();
+
+            service.counter.setValueAndNotify(1);
+            await waitOneTickAfter();
+            service.counter.setValueAndNotify(2);
+            await waitOneTickAfter();
+
+            expect(collector1.events, 'collector1 events').to.eql([{ value: 1 }, { value: 2 }]);
+            expect(collector2.events, 'collector2 events').to.eql([{ value: 1 }, { value: 2 }]);
+        });
+        it('should not notify when value does not change', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(5) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const { events, handler } = createEventCollector<number>();
+
+            proxy.counter.subscribe(handler);
+            await waitOneTickAfter();
+
+            service.counter.setValueAndNotify(5); // same value
+            await waitOneTickAfter();
+
+            expect(events, 'no notifications').to.eql([]);
+        });
+        it('should handle specific unsubscribe with multiple subscribers', async () => {
+            const { comMain, comChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(0) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const collector1 = createEventCollector<number>();
+            const collector2 = createEventCollector<number>();
+
+            proxy.counter.subscribe(collector1.handler);
+            proxy.counter.subscribe(collector2.handler);
+            await waitOneTickAfter();
+
+            proxy.counter.unsubscribe(collector1.handler);
+            await waitOneTickAfter();
+
+            service.counter.setValueAndNotify(1);
+            await waitOneTickAfter();
+
+            expect(collector1.events, 'unsubscribed, no events').to.eql([]);
+            expect(collector2.events, 'still subscribed').to.eql([{ value: 1 }]);
+        });
     });
 
     it('multi communication', async () => {
