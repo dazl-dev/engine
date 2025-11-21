@@ -66,14 +66,13 @@ export class Service<
                 providedFrom.has(Universal.env) || hasIntersection(providedFrom, runtimeEngine.runningEnvNames);
             if (shouldIncludeService) {
                 if (!providedValue) {
-                    throw new Error(
-                        `Service is not provided at runtime.
+                    throw new Error(`
+Service is not provided at runtime.
 Make sure the environment setup file exists and named correctly: [featureName].[envName].env.[ext]
 Service name: ${entityKey}
 Feature id: ${featureID}
 Environment: ${runtimeEngine.entryEnvironment.env}
-                        `,
-                    );
+`);
                 }
                 communication.registerAPI({ id: serviceKey }, providedValue);
                 return providedValue;

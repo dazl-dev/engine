@@ -11,6 +11,7 @@ import {
     Slot,
     declareComEmitter,
     multiTenantMethod,
+    RemoteValue,
 } from '@dazl/engine-core';
 import * as chai from 'chai';
 import { expect } from 'chai';
@@ -52,6 +53,45 @@ describe('Communication', () => {
         const res = await proxy.echo('Yoo!');
 
         expect(res).to.be.equal('Yoo!');
+    });
+
+    it('signal support', async () => {
+        class EchoServiceWithSignal {
+            onChange = new RemoteValue<string>('');
+            echo(s: string) {
+                return s;
+            }
+        }
+        const host = new BaseHost();
+        const main = new Communication(host, 'main');
+        const echoService = new EchoServiceWithSignal();
+        main.registerAPI({ id: 'echoService' }, echoService);
+
+        const proxy = main.apiProxy<EchoServiceWithSignal>(Promise.resolve({ id: 'main' }), { id: 'echoService' });
+        const out: string[] = [];
+        const versions: number[] = [];
+
+        const handler = (e: string, version: number) => {
+            out.push(e);
+            versions.push(version);
+        };
+        proxy.onChange.subscribe(handler);
+
+        // this code simulate cross environment communication it cannot be synchronous
+        await sleep(0);
+        echoService.onChange.setValueAndNotify('test');
+        //////////////////////////////////////////////////////////////////////////////
+
+        proxy.onChange.unsubscribe(handler);
+
+        // this code simulate cross environment communication it cannot be synchronous
+        await sleep(0);
+        echoService.onChange.setValueAndNotify('test 2');
+        await sleep(0);
+        //////////////////////////////////////////////////////////////////////////////
+
+        expect(versions).to.eql([1]);
+        expect(out).to.eql(['test']);
     });
 
     it('multi communication', async () => {

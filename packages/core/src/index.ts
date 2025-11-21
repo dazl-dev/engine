@@ -9,6 +9,7 @@ export * from './runtime-feature.js';
 export * from './symbols.js';
 export * from './types.js';
 export * from './communication.feature.js';
+export * from './value-signal.js';
 
 export * from './runtime-main.js';
 export * from './runtime-configurations.js';
