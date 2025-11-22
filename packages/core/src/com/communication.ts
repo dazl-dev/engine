@@ -55,6 +55,7 @@ import {
     UnConfiguredMethodError,
     UnknownCallbackIdError,
 } from './communication-errors.js';
+import { type RemoteValueAsyncMethods, type RemoteValue, remoteValueAsyncMethods } from '../remote-value.js';
 
 export interface ConfigEnvironmentRecord extends EnvironmentRecord {
     registerMessageHandler?: boolean;
@@ -94,6 +95,11 @@ export class Communication {
     private messageIdPrefix: string;
     // manual DEBUG_MODE
     private DEBUG = false;
+    // Track RemoteValue subscriptions with their current versions
+    private remoteValueTracking = new Map<
+        string,
+        { currentVersion: number; envId: string; api: string; method: string }
+    >();
     constructor(
         private host: Target,
         id: string,
@@ -196,9 +202,9 @@ export class Communication {
         serviceComConfig: ServiceComConfig<T> = {},
     ): AsyncApi<T> {
         return new Proxy(Object.create(null), {
-            get: (obj, method) => {
+            get: (runtimeCache, key) => {
                 // let js runtime know that this is not thenable object
-                if (method === 'then') {
+                if (key === 'then') {
                     return undefined;
                 }
 
@@ -207,27 +213,62 @@ export class Communication {
                  * they used by the debugger and cause messages to be sent everywhere
                  * this behavior made debugging very hard and can cause errors and infinite loops
                  */
-                if (Object.hasOwn(Object.prototype, method)) {
-                    return Reflect.get(Object.prototype, method);
+                if (Object.hasOwn(Object.prototype, key)) {
+                    return Reflect.get(Object.prototype, key);
                 }
-                if (typeof method === 'string') {
-                    let runtimeMethod = obj[method];
-                    if (!runtimeMethod) {
-                        runtimeMethod = async (...args: unknown[]) =>
+                if (typeof key === 'string') {
+                    let runtimeValue = runtimeCache[key];
+                    if (!runtimeValue) {
+                        runtimeValue = async (...args: unknown[]) =>
                             this.callMethod(
                                 (await instanceToken).id,
                                 api,
-                                method,
+                                key,
                                 args,
                                 this.rootEnvId,
                                 serviceComConfig as Record<string, AnyServiceMethodOptions>,
                             );
-                        obj[method] = runtimeMethod;
+                        runtimeCache[key] = Object.assign(
+                            runtimeValue,
+                            this.createAsyncRemoteValue<T>(key, serviceComConfig, instanceToken, api),
+                        );
                     }
-                    return runtimeMethod;
+                    return runtimeValue;
                 }
             },
         });
+    }
+    private createAsyncRemoteValue<T extends object>(
+        key: string,
+        serviceComConfig: ServiceComConfig<T>,
+        instanceToken: EnvironmentInstanceToken | Promise<EnvironmentInstanceToken>,
+        api: string,
+    ) {
+        const config = serviceComConfig as Record<string, AnyServiceMethodOptions>;
+        const methods = {
+            subscribe: `${key}.subscribe`,
+            unsubscribe: `${key}.unsubscribe`,
+            stream: `${key}.stream`,
+            getValue: `${key}.getValue`,
+            reconnect: `${key}.reconnect`,
+        };
+
+        config[methods.subscribe] = { emitOnly: true, listener: true };
+        config[methods.stream] = { emitOnly: true, listener: true };
+        config[methods.unsubscribe] = { emitOnly: true, removeListener: methods.subscribe };
+
+        const createMethod =
+            (methodName: string) =>
+            async (...args: unknown[]) => {
+                return this.callMethod((await instanceToken).id, api, methodName, args, this.rootEnvId, config);
+            };
+        return {
+            subscribe: createMethod(methods.subscribe),
+            unsubscribe: createMethod(methods.unsubscribe),
+            stream: createMethod(methods.stream),
+            getValue: createMethod(methods.getValue),
+            reconnect: createMethod(methods.reconnect),
+        };
     }
 
     /**
@@ -634,11 +675,24 @@ export class Communication {
         this.post(env.host, message);
     }
 
-    private apiCall(origin: string, api: string, method: string, args: unknown[]): unknown {
-        if (this.apisOverrides[api]?.[method]) {
-            return this.apisOverrides[api][method](...[origin, ...args]);
+    private apiCall(origin: string, api: string, callPath: string, args: unknown[]): unknown {
+        const method = this.apisOverrides[api]?.[callPath];
+        if (typeof method === 'function') {
+            return method(...[origin, ...args]);
         }
-        return this.apis[api]![method]!(...args);
+        // support for RemoteValue
+        const [apiName, ...subActions] = callPath.split('.');
+        if (
+            apiName &&
+            subActions.length === 1 &&
+            remoteValueAsyncMethods.has(subActions[0] as RemoteValueAsyncMethods)
+        ) {
+            const remoteValue = this.apis[api]![apiName] as unknown as RemoteValue<unknown>;
+            const methodName = subActions[0] as RemoteValueAsyncMethods;
+            return (remoteValue[methodName] as UnknownFunction)(...args);
+        }
+        //
+        return (this.apis[api]![callPath] as UnknownFunction)(...args);
     }
 
     private unhandledMessage(message: Message): void {
@@ -783,6 +837,12 @@ export class Communication {
         if (!handlers) {
             return;
         }
+        // Track version for RemoteValue subscriptions
+        const tracking = this.remoteValueTracking.get(message.handlerId);
+        if (tracking && message.data.length === 2 && typeof message.data[1] === 'number') {
+            // RemoteValue listeners receive (value, version)
+            tracking.currentVersion = message.data[1];
+        }
         for (const handler of handlers.callbacks) {
             handler(...message.data);
         }
@@ -820,8 +880,48 @@ export class Communication {
                     this.sendTo(message.to, { ...message, callbackId: undefined });
                 }
             }
+            // Reconnect RemoteValue subscriptions
+            this.reconnectRemoteValues(from);
             for (const reConnectHandler of this.reConnectListeners) {
                 reConnectHandler(from);
+            }
+        }
+    }
+
+    /**
+     * Reconnect all RemoteValue subscriptions for a given environment.
+     * Called automatically when an environment reconnects.
+     */
+    private reconnectRemoteValues(envId: string): void {
+        for (const [handlerId, tracking] of this.remoteValueTracking.entries()) {
+            if (tracking.envId === envId) {
+                // Call reconnect method for this RemoteValue
+                const reconnectMethod = `${tracking.method}.reconnect`;
+                this.callMethod(envId, tracking.api, reconnectMethod, [tracking.currentVersion], this.rootEnvId, {})
+                    .then((result) => {
+                        if (result && typeof result === 'object' && 'value' in result && 'version' in result) {
+                            // Version mismatch detected, update tracking and notify handlers
+                            const syncData = result as { value: unknown; version: number };
+                            tracking.currentVersion = syncData.version;
+
+                            // Notify all handlers with the updated value
+                            const handlers = this.handlers.get(handlerId);
+                            if (handlers) {
+                                for (const handler of handlers.callbacks) {
+                                    handler(syncData.value, syncData.version);
+                                }
+                            }
+                        }
+                    })
+                    .catch((error) => {
+                        // Log error but don't fail the reconnection process
+                        if (this.DEBUG) {
+                            console.error(
+                                `Failed to reconnect RemoteValue ${tracking.api}.${tracking.method} for ${envId}:`,
+                                error,
+                            );
+                        }
+                    });
             }
         }
     }
@@ -966,13 +1066,35 @@ export class Communication {
             this.subscribeToEnvironmentDispose((disposedEnvId) => {
                 if (envId === disposedEnvId) {
                     this.handlers.delete(handlerId);
+                    this.remoteValueTracking.delete(handlerId);
                 }
             });
         }
         handlersBucket
             ? handlersBucket.callbacks.add(fn)
             : this.handlers.set(handlerId, { message, callbacks: new Set([fn]) });
+
+        // Track RemoteValue subscriptions
+        if (this.isRemoteValueSubscription(method)) {
+            this.remoteValueTracking.set(handlerId, {
+                currentVersion: 0,
+                envId,
+                api,
+                method: this.getRemoteValuePropertyName(method),
+            });
+        }
+
         return handlerId;
+    }
+
+    private isRemoteValueSubscription(method: string): boolean {
+        return method.endsWith('.subscribe') || method.endsWith('.stream');
+    }
+
+    private getRemoteValuePropertyName(method: string): string {
+        // Extract property name from 'propertyName.subscribe' or 'propertyName.stream'
+        const parts = method.split('.');
+        return parts.slice(0, -1).join('.');
     }
     private createCallbackRecord(
         message: Message,
