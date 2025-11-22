@@ -244,79 +244,31 @@ export class Communication {
         instanceToken: EnvironmentInstanceToken | Promise<EnvironmentInstanceToken>,
         api: string,
     ) {
-        const subSignalId = key + '.' + 'subscribe';
-        const unsubSignalId = key + '.' + 'unsubscribe';
-        const streamSignalId = key + '.' + 'stream';
-        const getValueId = key + '.getValue';
-        const reconnectId = key + '.reconnect';
-
-        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[subSignalId] = {
-            emitOnly: true,
-            listener: true,
-        };
-        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[unsubSignalId] = {
-            emitOnly: true,
-            removeListener: subSignalId,
-        };
-        (serviceComConfig as Record<string, AnyServiceMethodOptions>)[streamSignalId] = {
-            emitOnly: true,
-            listener: true,
+        const config = serviceComConfig as Record<string, AnyServiceMethodOptions>;
+        const methods = {
+            subscribe: `${key}.subscribe`,
+            unsubscribe: `${key}.unsubscribe`,
+            stream: `${key}.stream`,
+            getValue: `${key}.getValue`,
+            reconnect: `${key}.reconnect`,
         };
 
-        const asyncRemoteValue = {
-            subscribe: async (...args: unknown[]) => {
-                return this.callMethod(
-                    (await instanceToken).id,
-                    api,
-                    subSignalId,
-                    args,
-                    this.rootEnvId,
-                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                );
-            },
-            unsubscribe: async (fn: UnknownFunction) => {
-                return this.callMethod(
-                    (await instanceToken).id,
-                    api,
-                    unsubSignalId,
-                    [fn],
-                    this.rootEnvId,
-                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                );
-            },
-            stream: async (fn: UnknownFunction) => {
-                return this.callMethod(
-                    (await instanceToken).id,
-                    api,
-                    streamSignalId,
-                    [fn],
-                    this.rootEnvId,
-                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                );
-            },
-            getValue: async () => {
-                return this.callMethod(
-                    (await instanceToken).id,
-                    api,
-                    getValueId,
-                    [],
-                    this.rootEnvId,
-                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                );
-            },
-            reconnect: async (currentVersion: number) => {
-                return this.callMethod(
-                    (await instanceToken).id,
-                    api,
-                    reconnectId,
-                    [currentVersion],
-                    this.rootEnvId,
-                    serviceComConfig as Record<string, AnyServiceMethodOptions>,
-                );
-            },
-        };
+        config[methods.subscribe] = { emitOnly: true, listener: true };
+        config[methods.stream] = { emitOnly: true, listener: true };
+        config[methods.unsubscribe] = { emitOnly: true, removeListener: methods.subscribe };
 
-        return asyncRemoteValue;
+        const createMethod =
+            (methodName: string) =>
+            async (...args: unknown[]) => {
+                return this.callMethod((await instanceToken).id, api, methodName, args, this.rootEnvId, config);
+            };
+        return {
+            subscribe: createMethod(methods.subscribe),
+            unsubscribe: createMethod(methods.unsubscribe),
+            stream: createMethod(methods.stream),
+            getValue: createMethod(methods.getValue),
+            reconnect: createMethod(methods.reconnect),
+        };
     }
 
     /**
