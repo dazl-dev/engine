@@ -95,6 +95,11 @@ export class Communication {
     private messageIdPrefix: string;
     // manual DEBUG_MODE
     private DEBUG = false;
+    // Track RemoteValue subscriptions with their current versions
+    private remoteValueTracking = new Map<
+        string,
+        { currentVersion: number; envId: string; api: string; method: string }
+    >();
     constructor(
         private host: Target,
         id: string,
@@ -880,6 +885,12 @@ export class Communication {
         if (!handlers) {
             return;
         }
+        // Track version for RemoteValue subscriptions
+        const tracking = this.remoteValueTracking.get(message.handlerId);
+        if (tracking && message.data.length === 2 && typeof message.data[1] === 'number') {
+            // RemoteValue listeners receive (value, version)
+            tracking.currentVersion = message.data[1];
+        }
         for (const handler of handlers.callbacks) {
             handler(...message.data);
         }
@@ -917,8 +928,48 @@ export class Communication {
                     this.sendTo(message.to, { ...message, callbackId: undefined });
                 }
             }
+            // Reconnect RemoteValue subscriptions
+            this.reconnectRemoteValues(from);
             for (const reConnectHandler of this.reConnectListeners) {
                 reConnectHandler(from);
+            }
+        }
+    }
+
+    /**
+     * Reconnect all RemoteValue subscriptions for a given environment.
+     * Called automatically when an environment reconnects.
+     */
+    private reconnectRemoteValues(envId: string): void {
+        for (const [handlerId, tracking] of this.remoteValueTracking.entries()) {
+            if (tracking.envId === envId) {
+                // Call reconnect method for this RemoteValue
+                const reconnectMethod = `${tracking.method}.reconnect`;
+                this.callMethod(envId, tracking.api, reconnectMethod, [tracking.currentVersion], this.rootEnvId, {})
+                    .then((result) => {
+                        if (result && typeof result === 'object' && 'value' in result && 'version' in result) {
+                            // Version mismatch detected, update tracking and notify handlers
+                            const syncData = result as { value: unknown; version: number };
+                            tracking.currentVersion = syncData.version;
+
+                            // Notify all handlers with the updated value
+                            const handlers = this.handlers.get(handlerId);
+                            if (handlers) {
+                                for (const handler of handlers.callbacks) {
+                                    handler(syncData.value, syncData.version);
+                                }
+                            }
+                        }
+                    })
+                    .catch((error) => {
+                        // Log error but don't fail the reconnection process
+                        if (this.DEBUG) {
+                            console.error(
+                                `Failed to reconnect RemoteValue ${tracking.api}.${tracking.method} for ${envId}:`,
+                                error,
+                            );
+                        }
+                    });
             }
         }
     }
@@ -1063,13 +1114,35 @@ export class Communication {
             this.subscribeToEnvironmentDispose((disposedEnvId) => {
                 if (envId === disposedEnvId) {
                     this.handlers.delete(handlerId);
+                    this.remoteValueTracking.delete(handlerId);
                 }
             });
         }
         handlersBucket
             ? handlersBucket.callbacks.add(fn)
             : this.handlers.set(handlerId, { message, callbacks: new Set([fn]) });
+
+        // Track RemoteValue subscriptions
+        if (this.isRemoteValueSubscription(method)) {
+            this.remoteValueTracking.set(handlerId, {
+                currentVersion: 0,
+                envId,
+                api,
+                method: this.getRemoteValuePropertyName(method),
+            });
+        }
+
         return handlerId;
+    }
+
+    private isRemoteValueSubscription(method: string): boolean {
+        return method.endsWith('.subscribe') || method.endsWith('.stream');
+    }
+
+    private getRemoteValuePropertyName(method: string): string {
+        // Extract property name from 'propertyName.subscribe' or 'propertyName.stream'
+        const parts = method.split('.');
+        return parts.slice(0, -1).join('.');
     }
     private createCallbackRecord(
         message: Message,

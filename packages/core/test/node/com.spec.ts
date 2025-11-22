@@ -248,6 +248,47 @@ describe('Communication', () => {
             result = await proxy.counter.reconnect(2);
             expect(result, 'versions match, no update needed').to.eql(null);
         });
+        it('should auto-reconnect RemoteValue subscriptions on environment reconnection', async () => {
+            const { comMain, comChild, hostChild } = setupCrossEnvCommunication();
+            const service = { counter: new RemoteValue<number>(10) };
+            comChild.registerAPI({ id: 'myService' }, service);
+
+            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const { events, handler } = createEventCollector<number>();
+
+            // Subscribe to updates
+            proxy.counter.subscribe(handler);
+            await waitOneTickAfter();
+
+            // Update value before reconnection
+            service.counter.setValueAndNotify(20);
+            await waitOneTickAfter();
+            expect(events, 'received update before reconnect').to.eql([{ value: 20, version: 1 }]);
+
+            // Simulate environment disconnection by removing message handler
+            comChild.removeMessageHandler(hostChild);
+
+            // Reconnect the environment with new service instance that has progressed
+            const newService = { counter: new RemoteValue<number>(10) };
+            // Simulate the service progressing while "disconnected"
+            newService.counter.setValueAndNotify(30); // version 1
+            newService.counter.setValueAndNotify(40); // version 2
+
+            // Create new Communication with APIs passed in constructor (like other reconnection tests)
+            const reconnectedComChild = new Communication(hostChild, 'child', undefined, undefined, undefined, {
+                apis: { myService: newService } as any,
+            });
+            reconnectedComChild.registerEnv('main', comMain.getEnvironmentHost('main')!);
+
+            // Wait for auto-reconnection to happen and sync to complete
+            await waitFor(() => {
+                // Verify we got the latest synced value
+                expect(events.length, 'received reconnection sync').to.be.greaterThan(1);
+                const lastEvent = events[events.length - 1];
+                expect(lastEvent?.value, 'synced to latest value').to.equal(40);
+                expect(lastEvent?.version, 'synced to latest version').to.equal(2);
+            });
+        });
     });
 
     it('multi communication', async () => {
