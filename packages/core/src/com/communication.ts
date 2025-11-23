@@ -55,6 +55,13 @@ import {
     UnConfiguredMethodError,
     UnknownCallbackIdError,
 } from './communication-errors.js';
+import {
+    type RemoteValueAsyncMethods,
+    type RemoteValue,
+    remoteValueAsyncMethods,
+    ReconnectFunction,
+    RemoteValueListener,
+} from '../remote-value.js';
 
 export interface ConfigEnvironmentRecord extends EnvironmentRecord {
     registerMessageHandler?: boolean;
@@ -94,6 +101,8 @@ export class Communication {
     private messageIdPrefix: string;
     // manual DEBUG_MODE
     private DEBUG = false;
+    // Track RemoteValue subscriptions with their current versions
+    private remoteValueTracking = new Map<string, { currentVersion: number; reconnect: ReconnectFunction<unknown> }>();
     constructor(
         private host: Target,
         id: string,
@@ -196,9 +205,9 @@ export class Communication {
         serviceComConfig: ServiceComConfig<T> = {},
     ): AsyncApi<T> {
         return new Proxy(Object.create(null), {
-            get: (obj, method) => {
+            get: (runtimeCache, key) => {
                 // let js runtime know that this is not thenable object
-                if (method === 'then') {
+                if (key === 'then') {
                     return undefined;
                 }
 
@@ -207,27 +216,94 @@ export class Communication {
                  * they used by the debugger and cause messages to be sent everywhere
                  * this behavior made debugging very hard and can cause errors and infinite loops
                  */
-                if (Object.hasOwn(Object.prototype, method)) {
-                    return Reflect.get(Object.prototype, method);
+                if (Object.hasOwn(Object.prototype, key)) {
+                    return Reflect.get(Object.prototype, key);
                 }
-                if (typeof method === 'string') {
-                    let runtimeMethod = obj[method];
-                    if (!runtimeMethod) {
-                        runtimeMethod = async (...args: unknown[]) =>
+                if (typeof key === 'string') {
+                    let runtimeValue = runtimeCache[key];
+                    if (!runtimeValue) {
+                        runtimeValue = async (...args: unknown[]) =>
                             this.callMethod(
                                 (await instanceToken).id,
                                 api,
-                                method,
+                                key,
                                 args,
                                 this.rootEnvId,
                                 serviceComConfig as Record<string, AnyServiceMethodOptions>,
                             );
-                        obj[method] = runtimeMethod;
+                        runtimeCache[key] = Object.assign(
+                            runtimeValue,
+                            this.createAsyncRemoteValue<T>(key, serviceComConfig, instanceToken, api),
+                        );
                     }
-                    return runtimeMethod;
+                    return runtimeValue;
                 }
             },
         });
+    }
+    private createAsyncRemoteValue<T extends object>(
+        key: string,
+        serviceComConfig: ServiceComConfig<T>,
+        instanceToken: EnvironmentInstanceToken | Promise<EnvironmentInstanceToken>,
+        api: string,
+    ) {
+        const config = serviceComConfig as Record<string, AnyServiceMethodOptions>;
+        const methods = {
+            subscribe: `${key}.subscribe`,
+            unsubscribe: `${key}.unsubscribe`,
+            stream: `${key}.stream`,
+            getValue: `${key}.getValue`,
+        };
+
+        config[methods.subscribe] = { emitOnly: true, listener: true };
+        config[methods.stream] = { emitOnly: true, listener: true };
+        config[methods.unsubscribe] = { emitOnly: true, removeListener: methods.subscribe };
+
+        const createMethod =
+            (methodName: string) =>
+            async (...args: unknown[]) => {
+                return this.callMethod((await instanceToken).id, api, methodName, args, this.rootEnvId, config);
+            };
+
+        const fnHandlers = new WeakMap<RemoteValueListener<unknown>, RemoteValueListener<unknown>>();
+        const reconnect = createMethod(`${key}.reconnect`) as ReconnectFunction<unknown>;
+        const createHandlerMethod = (methodName: string) => {
+            return async (...args: unknown[]) => {
+                const envId = (await instanceToken).id;
+                const handlerId = this.getHandlerId(envId, api, methodName);
+                const callback = args[0] as UnknownFunction;
+                let wrapedCallback = fnHandlers.get(callback);
+                if (!wrapedCallback) {
+                    wrapedCallback = (value, version) => {
+                        this.remoteValueTracking.set(handlerId, {
+                            currentVersion: version,
+                            reconnect,
+                        });
+                        return callback(value, version);
+                    };
+                    fnHandlers.set(callback, wrapedCallback);
+                }
+                args[0] = wrapedCallback;
+                return this.callMethod(envId, api, methodName, args, this.rootEnvId, config);
+            };
+        };
+
+        return {
+            subscribe: createHandlerMethod(methods.subscribe),
+            stream: createHandlerMethod(methods.stream),
+            unsubscribe: async (fn: RemoteValueListener<unknown>) => {
+                const wrapedCallback = fnHandlers.get(fn);
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    methods.unsubscribe,
+                    [wrapedCallback],
+                    this.rootEnvId,
+                    config,
+                );
+            },
+            getValue: createMethod(methods.getValue),
+        };
     }
 
     /**
@@ -634,11 +710,23 @@ export class Communication {
         this.post(env.host, message);
     }
 
-    private apiCall(origin: string, api: string, method: string, args: unknown[]): unknown {
-        if (this.apisOverrides[api]?.[method]) {
-            return this.apisOverrides[api][method](...[origin, ...args]);
+    private apiCall(origin: string, api: string, callPath: string, args: unknown[]): unknown {
+        const method = this.apisOverrides[api]?.[callPath];
+        if (typeof method === 'function') {
+            return method(...[origin, ...args]);
         }
-        return this.apis[api]![method]!(...args);
+        // support for RemoteValue
+        const [apiName, ...subActions] = callPath.split('.');
+        if (
+            apiName &&
+            subActions.length === 1 &&
+            remoteValueAsyncMethods.has(subActions[0] as RemoteValueAsyncMethods)
+        ) {
+            const remoteValue = this.apis[api]![apiName] as RemoteValue<unknown>;
+            const methodName = subActions[0] as RemoteValueAsyncMethods;
+            return (remoteValue[methodName] as UnknownFunction)(...args);
+        }
+        return (this.apis[api]![callPath] as UnknownFunction)(...args);
     }
 
     private unhandledMessage(message: Message): void {
@@ -659,7 +747,6 @@ export class Communication {
         rej: (reason: unknown) => void,
     ) {
         const removeListenerRef = methodConfig?.removeAllListeners || methodConfig?.removeListener;
-
         if (removeListenerRef && !methodConfig?.listener) {
             const listenerHandlerId = this.getHandlerId(envId, api, removeListenerRef);
             const listenerHandlersBucket = this.handlers.get(listenerHandlerId);
@@ -825,6 +912,28 @@ export class Communication {
             }
         }
     }
+
+    /**
+     * Reconnect all RemoteValue subscriptions for a given environment.
+     * Called automatically when an environment reconnects.
+     */
+    async reconnectRemoteValues(envId: string) {
+        for (const [handlerId, tracking] of this.remoteValueTracking.entries()) {
+            if (this.DEBUG) {
+                console.debug(
+                    `Reconnected RemoteValue for handler ${handlerId} in from ${envId} to version ${tracking.currentVersion}`,
+                );
+            }
+            await tracking.reconnect(tracking.currentVersion).then((res) => {
+                if (!res) {
+                    return;
+                }
+                for (const handler of this.handlers.get(handlerId)?.callbacks || []) {
+                    handler(res.value, res.version);
+                }
+            });
+        }
+    }
     private async handleUnListen(message: UnListenMessage) {
         const namespacedHandlerId = message.handlerId + message.origin;
         const dispatcher = this.eventDispatchers.get(namespacedHandlerId)?.dispatcher;
@@ -966,13 +1075,25 @@ export class Communication {
             this.subscribeToEnvironmentDispose((disposedEnvId) => {
                 if (envId === disposedEnvId) {
                     this.handlers.delete(handlerId);
+                    this.remoteValueTracking.delete(handlerId);
                 }
             });
         }
         handlersBucket
             ? handlersBucket.callbacks.add(fn)
             : this.handlers.set(handlerId, { message, callbacks: new Set([fn]) });
+
         return handlerId;
+    }
+
+    private isRemoteValueSubscription(method: string): boolean {
+        return method.endsWith('.subscribe') || method.endsWith('.stream');
+    }
+
+    private getRemoteValuePropertyName(method: string): string {
+        // Extract property name from 'propertyName.subscribe' or 'propertyName.stream'
+        const parts = method.split('.');
+        return parts.slice(0, -1).join('.');
     }
     private createCallbackRecord(
         message: Message,
