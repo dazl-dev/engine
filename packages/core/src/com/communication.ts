@@ -722,11 +722,10 @@ export class Communication {
             subActions.length === 1 &&
             remoteValueAsyncMethods.has(subActions[0] as RemoteValueAsyncMethods)
         ) {
-            const remoteValue = this.apis[api]![apiName] as unknown as RemoteValue<unknown>;
+            const remoteValue = this.apis[api]![apiName] as RemoteValue<unknown>;
             const methodName = subActions[0] as RemoteValueAsyncMethods;
             return (remoteValue[methodName] as UnknownFunction)(...args);
         }
-        //
         return (this.apis[api]![callPath] as UnknownFunction)(...args);
     }
 
