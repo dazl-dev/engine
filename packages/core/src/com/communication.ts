@@ -55,7 +55,13 @@ import {
     UnConfiguredMethodError,
     UnknownCallbackIdError,
 } from './communication-errors.js';
-import { type RemoteValueAsyncMethods, type RemoteValue, remoteValueAsyncMethods } from '../remote-value.js';
+import {
+    type RemoteValueAsyncMethods,
+    type RemoteValue,
+    remoteValueAsyncMethods,
+    ReconnectFunction,
+    RemoteValueListener,
+} from '../remote-value.js';
 
 export interface ConfigEnvironmentRecord extends EnvironmentRecord {
     registerMessageHandler?: boolean;
@@ -96,10 +102,7 @@ export class Communication {
     // manual DEBUG_MODE
     private DEBUG = false;
     // Track RemoteValue subscriptions with their current versions
-    private remoteValueTracking = new Map<
-        string,
-        { currentVersion: number; envId: string; api: string; method: string }
-    >();
+    private remoteValueTracking = new Map<string, { currentVersion: number; reconnect: ReconnectFunction<unknown> }>();
     constructor(
         private host: Target,
         id: string,
@@ -250,7 +253,6 @@ export class Communication {
             unsubscribe: `${key}.unsubscribe`,
             stream: `${key}.stream`,
             getValue: `${key}.getValue`,
-            reconnect: `${key}.reconnect`,
         };
 
         config[methods.subscribe] = { emitOnly: true, listener: true };
@@ -262,12 +264,45 @@ export class Communication {
             async (...args: unknown[]) => {
                 return this.callMethod((await instanceToken).id, api, methodName, args, this.rootEnvId, config);
             };
+
+        const fnHandlers = new WeakMap<RemoteValueListener<unknown>, RemoteValueListener<unknown>>();
+        const reconnect = createMethod(`${key}.reconnect`) as ReconnectFunction<unknown>;
+        const createHandlerMethod = (methodName: string) => {
+            return async (...args: unknown[]) => {
+                const envId = (await instanceToken).id;
+                const handlerId = this.getHandlerId(envId, api, methodName);
+                const callback = args[0] as UnknownFunction;
+                let wrapedCallback = fnHandlers.get(callback);
+                if (!wrapedCallback) {
+                    wrapedCallback = (value, version) => {
+                        this.remoteValueTracking.set(handlerId, {
+                            currentVersion: version,
+                            reconnect,
+                        });
+                        return callback(value, version);
+                    };
+                    fnHandlers.set(callback, wrapedCallback);
+                }
+                args[0] = wrapedCallback;
+                return this.callMethod(envId, api, methodName, args, this.rootEnvId, config);
+            };
+        };
+
         return {
-            subscribe: createMethod(methods.subscribe),
-            unsubscribe: createMethod(methods.unsubscribe),
-            stream: createMethod(methods.stream),
+            subscribe: createHandlerMethod(methods.subscribe),
+            stream: createHandlerMethod(methods.stream),
+            unsubscribe: async (fn: RemoteValueListener<unknown>) => {
+                const wrapedCallback = fnHandlers.get(fn);
+                return this.callMethod(
+                    (await instanceToken).id,
+                    api,
+                    methods.unsubscribe,
+                    [wrapedCallback],
+                    this.rootEnvId,
+                    config,
+                );
+            },
             getValue: createMethod(methods.getValue),
-            reconnect: createMethod(methods.reconnect),
         };
     }
 
@@ -713,7 +748,6 @@ export class Communication {
         rej: (reason: unknown) => void,
     ) {
         const removeListenerRef = methodConfig?.removeAllListeners || methodConfig?.removeListener;
-
         if (removeListenerRef && !methodConfig?.listener) {
             const listenerHandlerId = this.getHandlerId(envId, api, removeListenerRef);
             const listenerHandlersBucket = this.handlers.get(listenerHandlerId);
@@ -837,12 +871,6 @@ export class Communication {
         if (!handlers) {
             return;
         }
-        // Track version for RemoteValue subscriptions
-        const tracking = this.remoteValueTracking.get(message.handlerId);
-        if (tracking && message.data.length === 2 && typeof message.data[1] === 'number') {
-            // RemoteValue listeners receive (value, version)
-            tracking.currentVersion = message.data[1];
-        }
         for (const handler of handlers.callbacks) {
             handler(...message.data);
         }
@@ -880,8 +908,6 @@ export class Communication {
                     this.sendTo(message.to, { ...message, callbackId: undefined });
                 }
             }
-            // Reconnect RemoteValue subscriptions
-            this.reconnectRemoteValues(from);
             for (const reConnectHandler of this.reConnectListeners) {
                 reConnectHandler(from);
             }
@@ -892,37 +918,21 @@ export class Communication {
      * Reconnect all RemoteValue subscriptions for a given environment.
      * Called automatically when an environment reconnects.
      */
-    private reconnectRemoteValues(envId: string): void {
+    async reconnectRemoteValues(envId: string) {
         for (const [handlerId, tracking] of this.remoteValueTracking.entries()) {
-            if (tracking.envId === envId) {
-                // Call reconnect method for this RemoteValue
-                const reconnectMethod = `${tracking.method}.reconnect`;
-                this.callMethod(envId, tracking.api, reconnectMethod, [tracking.currentVersion], this.rootEnvId, {})
-                    .then((result) => {
-                        if (result && typeof result === 'object' && 'value' in result && 'version' in result) {
-                            // Version mismatch detected, update tracking and notify handlers
-                            const syncData = result as { value: unknown; version: number };
-                            tracking.currentVersion = syncData.version;
-
-                            // Notify all handlers with the updated value
-                            const handlers = this.handlers.get(handlerId);
-                            if (handlers) {
-                                for (const handler of handlers.callbacks) {
-                                    handler(syncData.value, syncData.version);
-                                }
-                            }
-                        }
-                    })
-                    .catch((error) => {
-                        // Log error but don't fail the reconnection process
-                        if (this.DEBUG) {
-                            console.error(
-                                `Failed to reconnect RemoteValue ${tracking.api}.${tracking.method} for ${envId}:`,
-                                error,
-                            );
-                        }
-                    });
+            if (this.DEBUG) {
+                console.debug(
+                    `Reconnected RemoteValue for handler ${handlerId} in from ${envId} to version ${tracking.currentVersion}`,
+                );
             }
+            await tracking.reconnect(tracking.currentVersion).then((res) => {
+                if (!res) {
+                    return;
+                }
+                for (const handler of this.handlers.get(handlerId)?.callbacks || []) {
+                    handler(res.value, res.version);
+                }
+            });
         }
     }
     private async handleUnListen(message: UnListenMessage) {
@@ -1073,16 +1083,6 @@ export class Communication {
         handlersBucket
             ? handlersBucket.callbacks.add(fn)
             : this.handlers.set(handlerId, { message, callbacks: new Set([fn]) });
-
-        // Track RemoteValue subscriptions
-        if (this.isRemoteValueSubscription(method)) {
-            this.remoteValueTracking.set(handlerId, {
-                currentVersion: 0,
-                envId,
-                api,
-                method: this.getRemoteValuePropertyName(method),
-            });
-        }
 
         return handlerId;
     }

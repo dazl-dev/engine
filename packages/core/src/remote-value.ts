@@ -1,10 +1,14 @@
 export type RemoteValueListener<T> = (data: T, version: number) => void;
+export type ReconnectFunction<T> = (currentVersion: number) => Promise<{
+    value: T;
+    version: number;
+} | null>;
+
 export type AsyncRemoteValue<T> = {
     getValue: () => Promise<T>;
     stream: (handler: RemoteValueListener<T>) => void;
     subscribe: (handler: RemoteValueListener<T>) => void;
     unsubscribe: (handler: RemoteValueListener<T>) => void;
-    reconnect: (currentVersion: number) => Promise<{ value: T; version: number } | null>;
 };
 
 export const remoteValueAsyncMethods = new Set([

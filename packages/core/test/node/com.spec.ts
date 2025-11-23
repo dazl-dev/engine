@@ -223,41 +223,23 @@ describe('Communication', () => {
             expect(collector1.events, 'unsubscribed, no events').to.eql([]);
             expect(collector2.events, 'still subscribed').to.eql([{ value: 1, version: 1 }]);
         });
-        it('should reconnect and sync version correctly', async () => {
-            const { comMain, comChild } = setupCrossEnvCommunication();
+        it('should allow reconnect RemoteValue subscriptions on environment reconnection', async () => {
+            const hostServer = new BaseHost();
+            const hostClient = new BaseHost();
+            const comClient = new Communication(hostClient, 'client');
+            const comServer = new Communication(hostServer, 'server');
+
+            comClient.registerEnv('server', hostServer);
+            comServer.registerEnv('client', hostClient);
+
             const service = { counter: new RemoteValue<number>(10) };
-            comChild.registerAPI({ id: 'myService' }, service);
+            comServer.registerAPI({ id: 'myService' }, service);
 
-            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
-
-            // Initial version is 0, reconnect with matching version should return null
-            let result = await proxy.counter.reconnect(0);
-            expect(result, 'initial sync, versions match').to.eql(null);
-
-            // Update value multiple times
-            service.counter.setValueAndNotify(20);
-            await waitOneTickAfter();
-            service.counter.setValueAndNotify(30);
-            await waitOneTickAfter();
-
-            // Reconnect with old version should return latest value and version
-            result = await proxy.counter.reconnect(0);
-            expect(result, 'versions mismatch, return latest').to.eql({ value: 30, version: 2 });
-
-            // Reconnect with current version should return null
-            result = await proxy.counter.reconnect(2);
-            expect(result, 'versions match, no update needed').to.eql(null);
-        });
-        it('should auto-reconnect RemoteValue subscriptions on environment reconnection', async () => {
-            const { comMain, comChild, hostChild } = setupCrossEnvCommunication();
-            const service = { counter: new RemoteValue<number>(10) };
-            comChild.registerAPI({ id: 'myService' }, service);
-
-            const proxy = comMain.apiProxy<ServiceWithRemoteValue>({ id: 'child' }, { id: 'myService' });
+            const clientService = comClient.apiProxy<ServiceWithRemoteValue>({ id: 'server' }, { id: 'myService' });
             const { events, handler } = createEventCollector<number>();
 
             // Subscribe to updates
-            proxy.counter.subscribe(handler);
+            clientService.counter.subscribe(handler);
             await waitOneTickAfter();
 
             // Update value before reconnection
@@ -265,28 +247,21 @@ describe('Communication', () => {
             await waitOneTickAfter();
             expect(events, 'received update before reconnect').to.eql([{ value: 20, version: 1 }]);
 
-            // Simulate environment disconnection by removing message handler
-            comChild.removeMessageHandler(hostChild);
+            comServer.clearEnvironment(comClient.getEnvironmentId());
 
-            // Reconnect the environment with new service instance that has progressed
-            const newService = { counter: new RemoteValue<number>(10) };
-            // Simulate the service progressing while "disconnected"
-            newService.counter.setValueAndNotify(30); // version 1
-            newService.counter.setValueAndNotify(40); // version 2
+            service.counter.setValueAndNotify(30);
+            service.counter.setValueAndNotify(50);
 
-            // Create new Communication with APIs passed in constructor (like other reconnection tests)
-            const reconnectedComChild = new Communication(hostChild, 'child', undefined, undefined, undefined, {
-                apis: { myService: newService } as any,
-            });
-            reconnectedComChild.registerEnv('main', comMain.getEnvironmentHost('main')!);
+            comServer.registerEnv('client', hostClient);
 
-            // Wait for auto-reconnection to happen and sync to complete
+            await comClient.reconnectRemoteValues('server');
+
             await waitFor(() => {
                 // Verify we got the latest synced value
                 expect(events.length, 'received reconnection sync').to.be.greaterThan(1);
                 const lastEvent = events[events.length - 1];
-                expect(lastEvent?.value, 'synced to latest value').to.equal(40);
-                expect(lastEvent?.version, 'synced to latest version').to.equal(2);
+                expect(lastEvent?.value, 'synced to latest value').to.equal(50);
+                expect(lastEvent?.version, 'synced to latest version').to.equal(3);
             });
         });
     });
