@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 import type { EnvironmentTypes } from '../com/types.js';
 import { runtimeType } from '../entity-helpers.js';
 import type { Context, EnvVisibility, MapBy } from '../types.js';
