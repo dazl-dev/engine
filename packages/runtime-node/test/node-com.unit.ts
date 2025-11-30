@@ -31,6 +31,10 @@ describe('Socket communication', () => {
     let port: number;
 
     const disposables = createDisposables();
+    const disposeAfterTest = <T extends { dispose: () => void }>(obj: T) => {
+        disposables.add(() => obj.dispose());
+        return obj;
+    };
     afterEach(() => disposables.dispose());
 
     beforeEach(async () => {
@@ -55,8 +59,8 @@ describe('Socket communication', () => {
             }
         });
 
-        clientHost = new WsClientHost(serverTopology['server-host']);
-        serverHost = new WsServerHost(nameSpace);
+        clientHost = disposeAfterTest(new WsClientHost(serverTopology['server-host']));
+        serverHost = disposeAfterTest(new WsServerHost(nameSpace));
         await clientHost.connected;
     });
 
@@ -225,10 +229,10 @@ describe('Socket communication', () => {
     it('notifies if environment is disconnected', async () => {
         const spy = sinon.spy();
         const clientCom = new Communication(clientHost, 'client-host', serverTopology);
-        const { id } = await socketClientInitializer({
+        const { id } = disposeAfterTest(await socketClientInitializer({
             communication: clientCom,
             env: new Environment('server-host', 'node', 'single'),
-        });
+        }));
 
         expect(id).to.not.eq(undefined);
 
@@ -250,23 +254,23 @@ describe('Socket communication', () => {
             createWaitForCall<(ev: { data: Message }) => void>('server');
         const { waitForCall: waitForClient1Call, spy: spyClient1 } =
             createWaitForCall<(ev: { data: Message }) => void>('client');
-        const clientHost1 = new WsClientHost(serverTopology['server-host']!);
-        const clientHost2 = new WsClientHost(serverTopology['server-host']!);
+        const clientHost1 = disposeAfterTest(new WsClientHost(serverTopology['server-host']!));
+        const clientHost2 = disposeAfterTest(new WsClientHost(serverTopology['server-host']!));
         const clientCom1 = new Communication(clientHost1, 'client-host1', serverTopology);
         const clientCom2 = new Communication(clientHost2, 'client-host2', serverTopology);
         new Communication(serverHost, 'server-host');
-        await socketClientInitializer({
+        disposeAfterTest(await socketClientInitializer({
             communication: clientCom1,
             env: {
                 env: 'server-host',
             },
-        });
-        await socketClientInitializer({
+        }));
+        disposeAfterTest(await socketClientInitializer({
             communication: clientCom2,
             env: {
                 env: 'server-host',
             },
-        });
+        }));
         clientCom1.registerEnv('client-host2', clientCom1.getEnvironmentHost('server-host')!);
         serverHost.addEventListener('message', spyServer);
         clientHost1.addEventListener('message', spyClient1);
