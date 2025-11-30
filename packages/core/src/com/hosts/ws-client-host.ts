@@ -1,4 +1,4 @@
-import { io, Socket, type SocketOptions } from 'socket.io-client';
+import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket.io-client';
 import type { Message } from '../message-types.js';
 import { BaseHost } from './base-host.js';
 import { EventEmitter, IDisposable, SafeDisposable } from '@dazl/patterns';
@@ -10,9 +10,9 @@ export class WsClientHost extends BaseHost implements IDisposable {
     isDisposed = this.disposables.isDisposed;
     public connected: Promise<void>;
     private socketClient: Socket;
-    public subscribers = new EventEmitter<{ disconnect: void; reconnect: void }>();
+    public subscribers = new EventEmitter<{ connect: void; disconnect: string; reconnect: void }>();
 
-    constructor(url: string, options?: Partial<SocketOptions>) {
+    constructor(url: string, options?: Partial<ManagerOptions & SocketOptions>) {
         super();
         this.disposables.add('close socket', () => this.socketClient.close());
         this.disposables.add('clear subscribers', () => this.subscribers.clear());
@@ -36,15 +36,16 @@ export class WsClientHost extends BaseHost implements IDisposable {
         });
 
         this.socketClient.on('connect', () => {
-            this.socketClient.on('message', (data: unknown) => {
-                this.emitMessageHandlers(data as Message);
-            });
+            this.subscribers.emit('connect', undefined);
             resolve();
         });
 
-        this.socketClient.on('disconnect', () => {
-            this.subscribers.emit('disconnect', undefined);
-            this.socketClient.close();
+        this.socketClient.on('message', (data: unknown) => {
+            this.emitMessageHandlers(data as Message);
+        });
+
+        this.socketClient.on('disconnect', (reason) => {
+            this.subscribers.emit('disconnect', reason);
         });
 
         this.socketClient.on('reconnect', () => {
@@ -56,5 +57,19 @@ export class WsClientHost extends BaseHost implements IDisposable {
 
     public postMessage(data: any) {
         this.socketClient.emit('message', data);
+    }
+
+    disconnectSocket() {
+        if (this.socketClient.connected) {
+            this.socketClient.disconnect();
+        }
+    }
+    reconnectSocket() {
+        if (!this.socketClient.connected) {
+            this.socketClient.connect();
+        }
+    }
+    isConnected(): boolean {
+        return this.socketClient.connected;
     }
 }
