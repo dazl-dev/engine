@@ -12,14 +12,14 @@
     "test": "mocha \"dist/test/**/*.unit.js\""
   },
   "dependencies": {
-    "@dazl/common": "^18.6.0",
+    "@dazl/common": "^18.6.1",
     "@dazl/engine-core": "^51.6.0",
     "@dazl/isomorphic-worker": "^2.0.0",
-    "@dazl/patterns": "^18.6.0",
+    "@dazl/patterns": "^18.6.1",
     "@file-services/node": "^11.0.1",
     "cors": "^2.8.5",
     "create-listening-server": "^2.1.0",
-    "express": "^5.1.0",
+    "express": "^5.2.1",
     "minimist": "^1.2.8",
     "socket.io": "^4.8.1"
   },
