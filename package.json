@@ -59,7 +59,7 @@
     "sinon": "^21.0.0",
     "sinon-chai": "^4.0.1",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.48.0",
+    "typescript-eslint": "^8.48.1",
     "typescript-type-utils": "^0.1.0"
   },
   "license": "MIT"
