@@ -22,7 +22,7 @@
     "@file-services/node": "^11.0.1",
     "@file-services/resolve": "^11.0.1",
     "@file-services/types": "^11.0.1",
-    "cleye": "^2.0.1",
+    "cleye": "^2.1.0",
     "cors": "^2.8.5",
     "create-listening-server": "^2.1.0",
     "express": "^5.2.1",
