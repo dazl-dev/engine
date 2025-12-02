@@ -101,7 +101,6 @@ export type EnvType<T extends EnvVisibility> =
           : never;
 
 type FilterENVKeys<T extends EntityRecord, ENV extends AnyEnvironment, Key extends 'visibleAt' | 'providedFrom'> = {
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     [P in keyof T]: EnvType<T[P][Key]> & ReferencedEnvironments<ENV> extends never ? never : P;
 }[keyof T];
 
@@ -185,7 +184,6 @@ export type RegisteringFeature<
         ENV,
         'providedFrom'
     >,
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 > = keyof ProvidedOutputs extends never ? undefined | void : ProvidedOutputs;
 
 export interface Context<T> {
