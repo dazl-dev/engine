@@ -54,7 +54,7 @@
     "prettier": "^3.7.4",
     "promise-assist": "^2.0.1",
     "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "react-dom": "^19.2.3",
     "rimraf": "^6.1.2",
     "sinon": "^21.0.0",
     "sinon-chai": "^4.0.1",
