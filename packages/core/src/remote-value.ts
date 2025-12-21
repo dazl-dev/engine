@@ -1,4 +1,4 @@
-export type RemoteValueListener<T> = (data: T, version: number) => void;
+export type RemoteValueListener<T> = (data: T, version: number, modifier?: string) => void;
 export type ReconnectFunction<T> = (currentVersion: number) => Promise<{
     value: T;
     version: number;
