@@ -1,3 +1,4 @@
+import { RemoteAggregatedValue, AsyncRemoteAggregatedValue } from '../remote-aggregated-value.js';
 import { AsyncRemoteValue, RemoteValue } from '../remote-value.js';
 import { SERVICE_CONFIG } from '../symbols.js';
 import { Message } from './message-types.js';
@@ -67,7 +68,9 @@ export type AsyncApi<T extends object> = {
             ? (...args: Args) => Promise<R>
             : T[P] extends RemoteValue<infer X>
               ? AsyncRemoteValue<X>
-              : never;
+              : T[P] extends RemoteAggregatedValue<infer X>
+                ? AsyncRemoteAggregatedValue<X>
+                : never;
 } & {
     [K in Extract<keyof T, keyof object>]: never;
 };
