@@ -1085,16 +1085,6 @@ export class Communication {
 
         return handlerId;
     }
-
-    private isRemoteValueSubscription(method: string): boolean {
-        return method.endsWith('.subscribe') || method.endsWith('.stream');
-    }
-
-    private getRemoteValuePropertyName(method: string): string {
-        // Extract property name from 'propertyName.subscribe' or 'propertyName.stream'
-        const parts = method.split('.');
-        return parts.slice(0, -1).join('.');
-    }
     private createCallbackRecord(
         message: Message,
         callbackId: string,
