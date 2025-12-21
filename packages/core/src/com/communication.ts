@@ -274,12 +274,12 @@ export class Communication {
                 const callback = args[0] as UnknownFunction;
                 let wrapedCallback = fnHandlers.get(callback);
                 if (!wrapedCallback) {
-                    wrapedCallback = (value, version) => {
+                    wrapedCallback = (value, version, ...callbackArgs) => {
                         this.remoteValueTracking.set(handlerId, {
                             currentVersion: version,
                             reconnect,
                         });
-                        return callback(value, version);
+                        return callback(value, version, ...callbackArgs);
                     };
                     fnHandlers.set(callback, wrapedCallback);
                 }
@@ -929,7 +929,7 @@ export class Communication {
                     return;
                 }
                 for (const handler of this.handlers.get(handlerId)?.callbacks || []) {
-                    handler(res.value, res.version);
+                    handler(res.value, res.version, 'all');
                 }
             });
         }

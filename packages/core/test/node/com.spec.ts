@@ -6,6 +6,7 @@ import {
     Environment,
     Feature,
     RemoteValue,
+    RemoteAggregatedValue,
     RuntimeEngine,
     SERVICE_CONFIG,
     Service,
@@ -246,14 +247,12 @@ describe('Communication', () => {
             service.counter.setValueAndNotify(20);
             await waitOneTickAfter();
             expect(events, 'received update before reconnect').to.eql([{ value: 20, version: 1 }]);
-
             comServer.clearEnvironment(comClient.getEnvironmentId());
 
             service.counter.setValueAndNotify(30);
             service.counter.setValueAndNotify(50);
 
             comServer.registerEnv('client', hostClient);
-
             await comClient.reconnectRemoteValues('server');
 
             await waitFor(() => {
@@ -262,6 +261,185 @@ describe('Communication', () => {
                 const lastEvent = events[events.length - 1];
                 expect(lastEvent?.value, 'synced to latest value').to.equal(50);
                 expect(lastEvent?.version, 'synced to latest version').to.equal(3);
+            });
+        });
+    });
+
+    describe('RemoteAggregatedValue', () => {
+        interface ServiceWithRemoteAggregatedValue {
+            items: RemoteAggregatedValue<string>;
+        }
+
+        function setupCrossEnvCommunication() {
+            const hostServer = new BaseHost();
+            const hostClient = new BaseHost();
+            const comServer = new Communication(hostServer, 'server');
+            const comClient = new Communication(hostClient, 'client');
+
+            comServer.registerEnv('client', hostClient);
+            comClient.registerEnv('server', hostServer);
+
+            return { comServer, comClient, hostServer, hostClient };
+        }
+
+        function createAggregatedEventCollector<T>() {
+            const events: Array<{ value: T | T[]; version: number; modifier: 'item' | 'all' }> = [];
+            const handler = (value: T | T[], version: number, modifier: 'item' | 'all') => {
+                events.push({ value: structuredClone(value), version, modifier });
+            };
+            return { events, handler };
+        }
+
+        const waitOneTickAfter = () => sleep(0);
+
+        it('should start with an empty array', async () => {
+            const { comServer, comClient } = setupCrossEnvCommunication();
+            const service = { items: new RemoteAggregatedValue<string>() };
+            comClient.registerAPI({ id: 'myService' }, service);
+            const proxy = comServer.apiProxy<ServiceWithRemoteAggregatedValue>({ id: 'client' }, { id: 'myService' });
+
+            const value = await proxy.items.getValue();
+
+            expect(value).to.eql([]);
+        });
+        it('should subscribe to current value immediately', async () => {
+            const { comServer, comClient } = setupCrossEnvCommunication();
+            const service = { items: new RemoteAggregatedValue<string>() };
+            service.items.push('a'); // version 1
+            service.items.push('b'); // version 2
+            comClient.registerAPI({ id: 'myService' }, service);
+            const proxy = comServer.apiProxy<ServiceWithRemoteAggregatedValue>({ id: 'client' }, { id: 'myService' });
+            const { events, handler } = createAggregatedEventCollector<string>();
+
+            proxy.items.subscribe(handler);
+            await waitOneTickAfter();
+
+            expect(events).to.eql([{ value: ['a', 'b'], version: 2, modifier: 'all' }]);
+        });
+        it('should push items and notify subscribers with versions', async () => {
+            const { comServer, comClient } = setupCrossEnvCommunication();
+            const service = { items: new RemoteAggregatedValue<string>() };
+            comClient.registerAPI({ id: 'myService' }, service);
+            const proxy = comServer.apiProxy<ServiceWithRemoteAggregatedValue>({ id: 'client' }, { id: 'myService' });
+            const { events, handler } = createAggregatedEventCollector<string>();
+
+            proxy.items.subscribe(handler);
+            await waitOneTickAfter();
+            service.items.push('a');
+            await waitOneTickAfter();
+            service.items.push('b');
+            await waitOneTickAfter();
+
+            expect(events).to.eql([
+                { value: [], version: 0, modifier: 'all' },
+                { value: 'a', version: 1, modifier: 'item' },
+                { value: 'b', version: 2, modifier: 'item' },
+            ]);
+        });
+        it('should respect the limit', async () => {
+            const { comServer, comClient } = setupCrossEnvCommunication();
+            const service = { items: new RemoteAggregatedValue<string>({ limit: 3 }) };
+            comClient.registerAPI({ id: 'myService' }, service);
+            const proxy = comServer.apiProxy<ServiceWithRemoteAggregatedValue>({ id: 'client' }, { id: 'myService' });
+
+            service.items.push('1');
+            service.items.push('2');
+            service.items.push('3');
+            service.items.push('4');
+            await waitOneTickAfter();
+
+            const value = await proxy.items.getValue();
+            expect(value).to.eql(['2', '3', '4']);
+        });
+        it('should unsubscribe correctly', async () => {
+            const { comServer, comClient } = setupCrossEnvCommunication();
+            const service = { items: new RemoteAggregatedValue<string>() };
+            comClient.registerAPI({ id: 'myService' }, service);
+            const proxy = comServer.apiProxy<ServiceWithRemoteAggregatedValue>({ id: 'client' }, { id: 'myService' });
+            const { events, handler } = createAggregatedEventCollector<string>();
+
+            proxy.items.subscribe(handler);
+            await waitOneTickAfter();
+
+            service.items.push('a');
+            await waitOneTickAfter();
+
+            proxy.items.unsubscribe(handler);
+            await waitOneTickAfter();
+
+            service.items.push('b');
+            await waitOneTickAfter();
+
+            expect(events).to.eql([
+                { value: [], version: 0, modifier: 'all' },
+                { value: 'a', version: 1, modifier: 'item' },
+            ]);
+        });
+        it('should clear items and notify subscribers', async () => {
+            const { comServer, comClient } = setupCrossEnvCommunication();
+            const service = { items: new RemoteAggregatedValue<string>() };
+            comClient.registerAPI({ id: 'myService' }, service);
+            const proxy = comServer.apiProxy<ServiceWithRemoteAggregatedValue>({ id: 'client' }, { id: 'myService' });
+            const { events, handler } = createAggregatedEventCollector<string>();
+
+            proxy.items.subscribe(handler);
+            await waitOneTickAfter();
+
+            service.items.push('a');
+            await waitOneTickAfter();
+
+            service.items.clear();
+            await waitOneTickAfter();
+
+            expect(events).to.eql([
+                { value: [], version: 0, modifier: 'all' },
+                { value: 'a', version: 1, modifier: 'item' },
+                { value: [], version: 2, modifier: 'all' },
+            ]);
+
+            const valueAfterClear = await proxy.items.getValue();
+            expect(valueAfterClear, 'getValue after clear').to.eql([]);
+        });
+
+        it('should reconnect RemoteAggregatedValue subscriptions after env reconnect', async () => {
+            const { comServer, comClient, hostClient } = setupCrossEnvCommunication();
+            const service = { items: new RemoteAggregatedValue<string>() };
+            comServer.registerAPI({ id: 'myService' }, service);
+            const clientService = comClient.apiProxy<ServiceWithRemoteAggregatedValue>(
+                { id: 'server' },
+                { id: 'myService' },
+            );
+            const { events, handler } = createAggregatedEventCollector<string>();
+
+            // initial subscription -> should immediately receive current value
+            clientService.items.subscribe(handler);
+            await waitOneTickAfter();
+            expect(events, 'initial subscribe emits current value').to.eql([
+                { value: [], version: 0, modifier: 'all' },
+            ]);
+
+            // push one item while connected
+            service.items.push('a'); // v1
+            await waitOneTickAfter();
+            // simulate env disconnect
+            comServer.clearEnvironment(comClient.getEnvironmentId());
+
+            // mutate while disconnected: subscriber should not see these yet
+            service.items.push('b'); // v2
+            service.items.push('c'); // v3
+            await waitOneTickAfter();
+
+            // reconnect the env and ask to resubscribe remote values
+            comServer.registerEnv('client', hostClient);
+            // reconnect is a method on the service side; it expects the origin env id (subscriber) as input
+            await comClient.reconnectRemoteValues('client');
+
+            await waitFor(() => {
+                expect(events.length, 'received reconnection sync').to.be.greaterThan(2);
+                const last = events[events.length - 1];
+                expect(last?.modifier, 'reconnect emits full snapshot').to.equal('all');
+                expect(last?.version, 'reconnected to latest version').to.equal(3);
+                expect(last?.value, 'reconnected to latest items').to.eql(['a', 'b', 'c']);
             });
         });
     });
