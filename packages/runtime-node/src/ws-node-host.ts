@@ -16,6 +16,7 @@ export class WsHost extends BaseHost {
 
 export class WsServerHost extends BaseHost implements IDisposable {
     private socketToEnvId = new Map<string, { socket: io.Socket; clientID: string }>();
+    private clientIdToSocket = new Map<string, io.Socket>();
     private disposables = new SafeDisposable(WsServerHost.name);
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
@@ -42,7 +43,17 @@ export class WsServerHost extends BaseHost implements IDisposable {
     }
 
     private onConnection = (socket: io.Socket): void => {
-        const nameSpace = (original: string) => `${socket.id}/${original}`;
+        const clientId = socket.handshake.auth?.clientId || socket.id;
+
+        // disconnect previous connection
+        const existingSocket = this.clientIdToSocket.get(clientId);
+        if (existingSocket && existingSocket.connected) {
+            existingSocket.disconnect(true);
+        }
+
+        this.clientIdToSocket.set(clientId, socket);
+
+        const nameSpace = (original: string) => `${clientId}/${original}`;
         const onMessage = (message: Message): void => {
             // this mapping should not be here because of forwarding of messages
             // maybe change message forwarding to have 'forward destination' and correct 'from'
@@ -73,6 +84,9 @@ export class WsServerHost extends BaseHost implements IDisposable {
                         forwardingChain: [],
                     });
                 }
+            }
+            if (this.clientIdToSocket.get(clientId) === socket) {
+                this.clientIdToSocket.delete(clientId);
             }
         });
     };
