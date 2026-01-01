@@ -298,6 +298,28 @@ describe('Socket communication', () => {
             expect(message.from).to.equal('server-host');
         });
     });
+
+    it('Should disconnect previous connection when same clientId reconnects', async () => {
+        const stableClientId = 'stable-client-id';
+        const disconnectSpy = sinon.spy();
+
+        const firstClient = disposeAfterTest(
+            new WsClientHost(serverTopology['server-host']!, { auth: { clientId: stableClientId } }),
+        );
+        await firstClient.connected;
+        firstClient.subscribers.on('disconnect', disconnectSpy);
+
+        expect(firstClient.isConnected(), 'first connected').to.eql(true);
+
+        const secondClient = disposeAfterTest(
+            new WsClientHost(serverTopology['server-host']!, { auth: { clientId: stableClientId } }),
+        );
+        await secondClient.connected;
+
+        await waitFor(() => expect(firstClient.isConnected(), 'first disconnected').to.eql(false), { timeout: 2_000 });
+        expect(disconnectSpy.callCount, 'first disconnected count').to.eq(1);
+        expect(secondClient.isConnected(), 'second connected').to.eql(true);
+    });
 });
 
 describe('IPC communication', () => {
