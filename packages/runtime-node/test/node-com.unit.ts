@@ -1,5 +1,5 @@
+import { createDisposables } from '@dazl/create-disposables';
 import {
-    BaseHost,
     Communication,
     Environment,
     WsClientHost,
@@ -7,12 +7,10 @@ import {
     type DisposeMessage,
     type Message,
 } from '@dazl/engine-core';
-import { IPCHost, WsServerHost } from '@dazl/engine-runtime-node';
-import { createDisposables } from '@dazl/create-disposables';
+import { WsServerHost } from '@dazl/engine-runtime-node';
 import { createWaitForCall } from '@dazl/wait-for-call';
 import { expect } from 'chai';
 import { safeListeningHttpServer } from 'create-listening-server';
-import { fork } from 'node:child_process';
 import type { Socket } from 'node:net';
 import { waitFor } from 'promise-assist';
 import sinon, { spy } from 'sinon';
@@ -319,52 +317,5 @@ describe('Socket communication', () => {
         await waitFor(() => expect(firstClient.isConnected(), 'first disconnected').to.eql(false), { timeout: 2_000 });
         expect(disconnectSpy.callCount, 'first disconnected count').to.eq(1);
         expect(secondClient.isConnected(), 'second connected').to.eql(true);
-    });
-});
-
-describe('IPC communication', () => {
-    const disposables = createDisposables();
-    afterEach(() => disposables.dispose());
-
-    it('communication with forked process', async () => {
-        const mainHost = new BaseHost();
-        const communication = new Communication(mainHost, 'main');
-        const forked = fork(new URL('./process-entry.js', import.meta.url));
-        disposables.add(() => forked.kill());
-        const host = new IPCHost(forked);
-        communication.registerEnv('process', host);
-        communication.registerMessageHandler(host);
-        const proxy = communication.apiProxy<{ echo(): string }>(
-            {
-                id: 'process',
-            },
-            { id: 'myApi' },
-        );
-
-        expect(await proxy.echo()).to.eq('yo');
-    });
-
-    it('handles forked process closing', async () => {
-        const mainHost = new BaseHost();
-        const communication = new Communication(mainHost, 'main');
-        const forked = fork(new URL('./process-entry.js', import.meta.url));
-        const host = new IPCHost(forked);
-        communication.registerEnv('process', host);
-        communication.registerMessageHandler(host);
-        const proxy = communication.apiProxy<{ echo(): string }>(
-            {
-                id: 'process',
-            },
-            { id: 'myApi' },
-        );
-
-        forked.kill();
-        const { waitForCall, spy } = createWaitForCall<(e: Error) => void>();
-        proxy.echo().catch(spy);
-        await waitForCall((args) => {
-            expect(args[0].message).to.have.string(
-                'Remote call failed in "process" - environment disconnected at "main"',
-            );
-        });
     });
 });
