@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@dazl/isomorphic-worker": "^2.0.0",
-    "@dazl/patterns": "^18.6.1",
+    "@dazl/patterns": "^18.7.0",
     "promise-assist": "^2.0.1",
     "socket.io-client": "^4.8.3"
   },
