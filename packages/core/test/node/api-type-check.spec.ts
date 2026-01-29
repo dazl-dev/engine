@@ -10,8 +10,12 @@ import {
     Slot,
     Universal,
     type AsyncApi,
+    type AsyncRemoteAggregatedValue,
+    type AsyncRemoteValue,
     type DisposeFunction,
     type IRunOptions,
+    type RemoteAggregatedValue,
+    type RemoteValue,
     type Running,
     type RunningFeatures,
 } from '@dazl/engine-core';
@@ -76,14 +80,6 @@ class GUI extends Feature<'gui'> {
     };
     dependencies = [Logger];
 }
-
-interface SomeApi {
-    someMethod: () => boolean;
-}
-
-type SomeApiPromisified = AsyncApi<SomeApi>;
-
-typeCheck((_: EQUAL<SomeApiPromisified, { someMethod(): Promise<boolean> }>) => true);
 
 typeCheck(
     (
@@ -211,3 +207,29 @@ export async function dontRun() {
     const _: 'addPanel' = engine.get(AddPanel).feature.id;
     console.log(_);
 }
+
+/** AsyncApi checks */
+
+interface SomeApi {
+    someMethod: () => boolean;
+    someAsyncMethod: () => Promise<number>;
+    someRemoteValue: RemoteValue<string>;
+    someRemoteAggregatedValue: RemoteAggregatedValue<number>;
+    shouldGetFilteredOut: string;
+}
+
+type SomeApiPromisified = AsyncApi<SomeApi>;
+
+typeCheck(
+    (
+        _: EQUAL<
+            SomeApiPromisified,
+            {
+                someMethod(): Promise<boolean>;
+                someAsyncMethod(): Promise<number>;
+                someRemoteValue: AsyncRemoteValue<string>;
+                someRemoteAggregatedValue: AsyncRemoteAggregatedValue<number>;
+            }
+        >,
+    ) => true,
+);

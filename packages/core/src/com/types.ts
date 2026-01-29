@@ -58,22 +58,40 @@ export interface EnvironmentRecord {
 }
 
 export type UnknownFunction = (...args: unknown[]) => unknown;
+export type AnyRemoteValue = RemoteValue<any> | RemoteAggregatedValue<any>;
+export type AnyFunction = (...args: any[]) => unknown;
+export type AnyAsyncFunction = (...args: any[]) => PromiseLike<any>;
 
 export type AsyncApi<T extends object> = {
-    [P in keyof T]: P extends keyof ServiceConfig<T>
+    [P in keyof T as FilterAsyncApiField<T, P>]: P extends keyof ServiceConfig<T>
         ? MultiTanentProxyFunction<T, P extends string ? P : never>
-        : T[P] extends (...args: any[]) => PromiseLike<any>
-          ? T[P]
-          : T[P] extends (...args: infer Args) => infer R
-            ? (...args: Args) => Promise<R>
-            : T[P] extends RemoteValue<infer X>
-              ? AsyncRemoteValue<X>
-              : T[P] extends RemoteAggregatedValue<infer X>
-                ? AsyncRemoteAggregatedValue<X>
-                : never;
-} & {
-    [K in Extract<keyof T, keyof object>]: never;
+        : MapAsyncApiField<T[P]>;
 };
+
+export type FilterAsyncApiField<T extends object, P extends keyof T> = P extends keyof ServiceConfig<T>
+    ? P
+    : T[P] extends AnyFunction | AnyRemoteValue
+      ? P
+      : never;
+
+export type MapAsyncApiField<T> = T extends AnyFunction
+    ? MapAsyncApiFn<T>
+    : T extends AnyRemoteValue
+      ? MapAsyncApiRemoteValue<T>
+      : never;
+
+export type MapAsyncApiFn<T extends AnyFunction> = T extends AnyAsyncFunction
+    ? T
+    : T extends (...args: infer Args) => infer R
+      ? (...args: Args) => Promise<R>
+      : never;
+
+export type MapAsyncApiRemoteValue<T extends AnyRemoteValue> =
+    T extends RemoteValue<infer X>
+        ? AsyncRemoteValue<X>
+        : T extends RemoteAggregatedValue<infer X>
+          ? AsyncRemoteAggregatedValue<X>
+          : never;
 
 export type MultiEnvAsyncApi<T extends object> = {
     /**
@@ -115,8 +133,6 @@ export type MultiTanentProxyFunction<T extends { [SERVICE_CONFIG]?: any }, K ext
 >['proxyFunction'];
 
 export type FilterFirstArgument<T> = T extends (_a: infer _First, ...rest: infer Args) => unknown ? Args : never;
-
-export type AnyFunction = (...args: any[]) => unknown;
 
 export interface APIService {
     [SERVICE_CONFIG]?: Record<string, (...args: any[]) => { proxyFunction: AnyFunction }>;
