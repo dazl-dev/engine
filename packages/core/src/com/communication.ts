@@ -33,6 +33,7 @@ import type {
 } from './message-types.js';
 import { isMessage } from './message-types.js';
 import {
+    type AnyFunction,
     type AnyServiceMethodOptions,
     type APIService,
     type AsyncApi,
@@ -45,7 +46,6 @@ import {
     type SerializableMethod,
     type ServiceComConfig,
     type Target,
-    type UnknownFunction,
 } from './types.js';
 import {
     CallbackTimeoutError,
@@ -86,8 +86,8 @@ export class Communication {
     private readonly callbackTimeout = 60_000 * 5; // 5 minutes
     private readonly slowThreshold = 5_000; // 5 seconds
     private pendingEnvs: SetMultiMap<string, () => void> = new SetMultiMap();
-    private pendingMessages = new SetMultiMap<string, UnknownFunction>();
-    private handlers = new Map<string, { message: ListenMessage; callbacks: Set<UnknownFunction> }>();
+    private pendingMessages = new SetMultiMap<string, AnyFunction>();
+    private handlers = new Map<string, { message: ListenMessage; callbacks: Set<AnyFunction> }>();
     private eventDispatchers = new Map<string, { dispatcher: SerializableMethod; message: ListenMessage }>();
     private apis: RemoteAPIServicesMapping;
     private apisOverrides: RemoteAPIServicesMapping = {};
@@ -271,7 +271,7 @@ export class Communication {
             return async (...args: unknown[]) => {
                 const envId = (await instanceToken).id;
                 const handlerId = this.getHandlerId(envId, api, methodName);
-                const callback = args[0] as UnknownFunction;
+                const callback = args[0] as AnyFunction;
                 let wrapedCallback = fnHandlers.get(callback);
                 if (!wrapedCallback) {
                     wrapedCallback = (value, version, ...callbackArgs) => {
@@ -361,7 +361,7 @@ export class Communication {
                     callbackId,
                     origin,
                     methodConfig,
-                    args[0] as UnknownFunction,
+                    args[0] as AnyFunction,
                     res,
                     rej,
                 );
@@ -724,9 +724,9 @@ export class Communication {
         ) {
             const remoteValue = this.apis[api]![apiName] as RemoteValue<unknown>;
             const methodName = subActions[0] as RemoteValueAsyncMethods;
-            return (remoteValue[methodName] as UnknownFunction)(...args);
+            return (remoteValue[methodName] as AnyFunction)(...args);
         }
-        return (this.apis[api]![callPath] as UnknownFunction)(...args);
+        return (this.apis[api]![callPath] as AnyFunction)(...args);
     }
 
     private unhandledMessage(message: Message): void {
@@ -742,7 +742,7 @@ export class Communication {
         callbackId: string | undefined,
         origin: string,
         methodConfig: AnyServiceMethodOptions | undefined,
-        fn: UnknownFunction,
+        fn: AnyFunction,
         res: (value?: any) => void,
         rej: (reason: unknown) => void,
     ) {
@@ -1066,7 +1066,7 @@ export class Communication {
         envId: string,
         api: string,
         method: string,
-        fn: UnknownFunction,
+        fn: AnyFunction,
         message: ListenMessage,
     ): string {
         const handlerId = this.getHandlerId(envId, api, method);

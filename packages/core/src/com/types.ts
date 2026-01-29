@@ -57,7 +57,6 @@ export interface EnvironmentRecord {
     host: Target;
 }
 
-export type UnknownFunction = (...args: unknown[]) => unknown;
 export type AnyRemoteValue = RemoteValue<any> | RemoteAggregatedValue<any>;
 export type AnyFunction = (...args: any[]) => unknown;
 export type AnyAsyncFunction = (...args: any[]) => PromiseLike<any>;
