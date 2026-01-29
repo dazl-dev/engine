@@ -74,12 +74,12 @@ export type FilterAsyncApiField<T extends object, P extends keyof T> = P extends
       : never;
 
 export type MapAsyncApiField<T> = T extends AnyFunction
-    ? MapAsyncApiFn<T>
+    ? PromisifyFn<T>
     : T extends AnyRemoteValue
       ? MapAsyncApiRemoteValue<T>
       : never;
 
-export type MapAsyncApiFn<T extends AnyFunction> = T extends AnyAsyncFunction
+export type PromisifyFn<T extends AnyFunction> = T extends AnyAsyncFunction
     ? T
     : T extends (...args: infer Args) => infer R
       ? (...args: Args) => Promise<R>
