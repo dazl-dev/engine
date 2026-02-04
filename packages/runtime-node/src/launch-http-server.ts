@@ -60,8 +60,8 @@ export async function launchEngineHttpServer({
         httpCompression: false,
         serveClient: false,
         maxHttpBufferSize: 1e8, // 100 MB
-        ...socketServerOptions,
         transports: ['websocket'],
+        ...socketServerOptions,
     });
 
     return {
