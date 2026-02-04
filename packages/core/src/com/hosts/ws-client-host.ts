@@ -10,7 +10,12 @@ export class WsClientHost extends BaseHost implements IDisposable {
     isDisposed = this.disposables.isDisposed;
     public connected: Promise<void>;
     private socketClient: Socket;
-    public subscribers = new EventEmitter<{ connect: void; disconnect: string; reconnect: void }>();
+    public subscribers = new EventEmitter<{
+        connect: void;
+        disconnect: string;
+        reconnect: void;
+        connectError: { status: number };
+    }>();
 
     constructor(url: string, options?: Partial<ManagerOptions & SocketOptions>) {
         super();
@@ -31,7 +36,9 @@ export class WsClientHost extends BaseHost implements IDisposable {
             ...options,
         });
 
-        this.socketClient.once('connect_error', (error) => {
+        this.socketClient.on('connect_error', (error) => {
+            const status = (error as { context?: { status: number } }).context?.status || 0;
+            this.subscribers.emit('connectError', { status });
             reject(new Error(`Failed to connect to socket server`, { cause: error }));
         });
 
