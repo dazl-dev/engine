@@ -181,16 +181,16 @@ describe('NodeEnvManager', () => {
 
             // Create a client connection
             const initialClientId = 'test-client-id';
-            const host = new WsClientHost('http://localhost:' + port, {
+            const client = new WsClientHost('http://localhost:' + port, {
                 auth: {
                     clientId: initialClientId,
                 },
             });
             const communication = new Communication(new BaseHost(), testCommunicationId);
-            communication.registerEnv(aEnv.env, host);
-            communication.registerMessageHandler(host);
+            communication.registerEnv(aEnv.env, client);
+            communication.registerMessageHandler(client);
 
-            await host.connected;
+            await client.connected;
 
             // Verify connection handler was called
             expect(connectionHandler.callCount).to.equal(1);
@@ -204,7 +204,7 @@ describe('NodeEnvManager', () => {
                 (socket as io.Socket).on('disconnect', () => {
                     resolve();
                 });
-                host.disconnectSocket();
+                client.disconnectSocket();
             });
 
             // Verify disconnection handler was called
