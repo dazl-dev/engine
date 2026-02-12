@@ -1,7 +1,7 @@
 import type io from 'socket.io';
 import { BaseHost, type Message } from '@dazl/engine-core';
 import { SafeDisposable, type IDisposable } from '@dazl/patterns';
-import { ILaunchHttpServerOptions } from './launch-http-server.js';
+import type { ILaunchHttpServerOptions } from './launch-http-server.js';
 
 export class WsHost extends BaseHost {
     constructor(private socket: io.Socket) {
