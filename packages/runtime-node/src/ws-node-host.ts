@@ -62,7 +62,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
     private onConnection = (socket: io.Socket): void => {
         const clientId = socket.handshake.auth?.clientId || socket.id;
         const existingSocket = this.clientIdToSocket.get(clientId);
-        
+
         this.clientIdToSocket.set(clientId, socket);
 
         // disconnect previous connection
