@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { safeListeningHttpServer } from 'create-listening-server';
 import * as io from 'socket.io';
+import { Message } from '@dazl/engine-core';
 
 export const DEFAULT_PORT = 3000;
 
@@ -21,6 +22,8 @@ export interface ILaunchHttpServerOptions {
     socketServerOptions?: Partial<io.ServerOptions>;
     routeMiddlewares?: Array<RouteMiddleware>;
     hostname?: string;
+    onConnectionOpen?: (clientId: string, socket: io.Socket, postMessage: (message: Message) => void) => void;
+    onConnectionClose?: (clientId: string) => void;
 }
 
 export async function launchEngineHttpServer({

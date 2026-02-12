@@ -60,6 +60,16 @@ export class NodeEnvManager implements IDisposable {
         runtimeOptions.set('enginePort', port.toString());
 
         const clientsHost = new WsServerHost(socketServer);
+        const disposeOnConnectionOpen = serverOptions.onConnectionOpen
+            ? clientsHost.registerConnectionHandler(serverOptions.onConnectionOpen)
+            : undefined;
+        const disposeOnConnectionClose = serverOptions.onConnectionClose
+            ? clientsHost.registerDisconnectionHandler(serverOptions.onConnectionClose)
+            : undefined;
+        const disposeConnectionHandlers = () => {
+            disposeOnConnectionOpen?.();
+            disposeOnConnectionClose?.();
+        };
         clientsHost.addEventListener('message', handleRegistrationOnMessage);
         const forwardingCom = new Communication(clientsHost, 'clients-host-com');
         function handleRegistrationOnMessage({ data }: { data: Message }) {
@@ -84,6 +94,7 @@ export class NodeEnvManager implements IDisposable {
             disposeMetricsListener();
             await this.closeAll();
             clientsHost.removeEventListener('message', handleRegistrationOnMessage);
+            disposeConnectionHandlers();
             await clientsHost.dispose();
             await close();
         };
@@ -97,7 +108,7 @@ export class NodeEnvManager implements IDisposable {
         if (process.send) {
             process.send({ port });
         }
-        return { port };
+        return { port, socketServer };
     }
 
     async closeAll() {
