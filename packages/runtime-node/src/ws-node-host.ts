@@ -71,8 +71,10 @@ export class WsServerHost extends BaseHost implements IDisposable {
         }
 
         for (const handler of this.connectionHandlers) {
-            handler(clientId, socket, (message: Message) => {
-                this.postMessage(message);
+            handler({
+                clientId,
+                socket,
+                postMessage: (message: Message) => this.postMessage(message),
             });
         }
 
@@ -108,13 +110,17 @@ export class WsServerHost extends BaseHost implements IDisposable {
                     });
                 }
             }
-            if (this.clientIdToSocket.get(clientId) === socket) {
+            const isActiveConnectionClosed = this.clientIdToSocket.get(clientId) === socket;
+            if (isActiveConnectionClosed) {
                 this.clientIdToSocket.delete(clientId);
-                for (const handler of this.disconnectionHandlers) {
-                    handler(clientId, (message: Message) => {
-                        this.postMessage(message);
-                    });
-                }
+            }
+            for (const handler of this.disconnectionHandlers) {
+                handler({
+                    clientId,
+                    postMessage: (message: Message) => this.postMessage(message),
+                    hasActiveConnection: !isActiveConnectionClosed,
+                    socket,
+                });
             }
         });
     };

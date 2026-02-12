@@ -22,8 +22,13 @@ export interface ILaunchHttpServerOptions {
     socketServerOptions?: Partial<io.ServerOptions>;
     routeMiddlewares?: Array<RouteMiddleware>;
     hostname?: string;
-    onConnectionOpen?: (clientId: string, socket: io.Socket, postMessage: (message: Message) => void) => void;
-    onConnectionClose?: (clientId: string, postMessage: (message: Message) => void) => void;
+    onConnectionOpen?: (data: { clientId: string; socket: io.Socket; postMessage: (message: Message) => void }) => void;
+    onConnectionClose?: (data: {
+        clientId: string;
+        postMessage: (message: Message) => void;
+        hasActiveConnection: boolean;
+        socket: io.Socket;
+    }) => void;
 }
 
 export async function launchEngineHttpServer({

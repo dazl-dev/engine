@@ -1,8 +1,8 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import type io from 'socket.io';
 import { BaseHost, COM, Communication, WsClientHost } from '@dazl/engine-core';
 import {
+    ILaunchHttpServerOptions,
     launchEngineHttpServer,
     NodeEnvManager,
     type NodeEnvsFeatureMapping,
@@ -179,41 +179,86 @@ describe('NodeEnvManager', () => {
                 onConnectionClose: disconnectionHandler,
             });
 
-            // Create a client connection
+            // Create a client connection 1
             const initialClientId = 'test-client-id';
-            const client = new WsClientHost('http://localhost:' + port, {
+            const client1 = new WsClientHost('http://localhost:' + port, {
                 auth: {
                     clientId: initialClientId,
                 },
             });
-            const communication = new Communication(new BaseHost(), testCommunicationId);
-            communication.registerEnv(aEnv.env, client);
-            communication.registerMessageHandler(client);
+            const communication1 = new Communication(new BaseHost(), testCommunicationId);
+            communication1.registerEnv(aEnv.env, client1);
+            communication1.registerMessageHandler(client1);
 
-            await client.connected;
+            await client1.connected;
 
             // Verify connection handler was called
             expect(connectionHandler.callCount).to.equal(1);
-            const [clientId, socket, postMessage] = connectionHandler.firstCall.args;
-            expect(clientId).to.equal(initialClientId);
-            expect(socket).to.have.property('id');
-            expect(postMessage).to.be.a('function');
+            const [args1] = connectionHandler.firstCall.args as Parameters<
+                Required<ILaunchHttpServerOptions>['onConnectionOpen']
+            >;
+            expect(args1.clientId).to.equal(initialClientId);
+            expect(args1.socket).to.have.property('id');
+            expect(args1.postMessage).to.be.a('function');
 
-            // Disconnect the client
-            await new Promise<void>((resolve) => {
-                (socket as io.Socket).on('disconnect', () => {
+            // Replace a client connection
+            const waitDisconnectFirstSocket = new Promise<void>((resolve) => {
+                args1.socket.on('disconnect', () => {
                     resolve();
                 });
-                client.disconnectSocket();
+            });
+            const client2 = new WsClientHost('http://localhost:' + port, {
+                auth: {
+                    clientId: initialClientId,
+                },
+            });
+            const communication2 = new Communication(new BaseHost(), testCommunicationId);
+            communication2.registerEnv(aEnv.env, client2);
+            communication2.registerMessageHandler(client2);
+
+            await client2.connected;
+
+            // Verify connection handler was called
+            expect(connectionHandler.callCount).to.equal(2);
+            const [args2] = connectionHandler.secondCall.args as Parameters<
+                Required<ILaunchHttpServerOptions>['onConnectionOpen']
+            >;
+            expect(args2.clientId).to.equal(initialClientId);
+            expect(args2.socket).to.have.property('id');
+            expect(args2.postMessage).to.be.a('function');
+            expect(args2.socket.id).to.not.equal(args1.socket.id);
+
+            // Verify disconnection handler was called after the client connection was replaced
+            await waitDisconnectFirstSocket;
+            expect(disconnectionHandler.callCount).to.equal(1);
+            const [disconnectArgs1] = disconnectionHandler.firstCall.args as Parameters<
+                Required<ILaunchHttpServerOptions>['onConnectionClose']
+            >;
+            expect(disconnectArgs1.clientId).to.equal(initialClientId);
+            expect(disconnectArgs1.postMessage).to.be.a('function');
+            expect(disconnectArgs1.socket.id).to.equal(args1.socket.id);
+            expect(disconnectArgs1.hasActiveConnection).to.equal(true);
+
+            // Disconnect an active socket
+            await new Promise<void>((resolve) => {
+                args2.socket.on('disconnect', () => {
+                    resolve();
+                });
+                client2.disconnectSocket();
             });
 
-            // Verify disconnection handler was called
-            expect(disconnectionHandler.callCount).to.equal(1);
-            const [disconnectedClientId, disconnectPostMessage] = disconnectionHandler.firstCall.args;
-            expect(disconnectedClientId).to.equal(clientId);
-            expect(disconnectPostMessage).to.be.a('function');
+            // Verify disconnection handler for active connection was called
+            expect(disconnectionHandler.callCount).to.equal(2);
+            const [disconnectArgs2] = disconnectionHandler.secondCall.args as Parameters<
+                Required<ILaunchHttpServerOptions>['onConnectionClose']
+            >;
+            expect(disconnectArgs2.clientId).to.equal(initialClientId);
+            expect(disconnectArgs2.postMessage).to.be.a('function');
+            expect(disconnectArgs2.hasActiveConnection).to.equal(false);
+            expect(disconnectArgs2.socket.id).to.equal(args2.socket.id);
 
-            await communication.dispose();
+            await communication1.dispose();
+            await communication2.dispose();
         });
     });
 
