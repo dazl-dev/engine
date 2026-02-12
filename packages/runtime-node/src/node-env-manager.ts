@@ -108,7 +108,7 @@ export class NodeEnvManager implements IDisposable {
         if (process.send) {
             process.send({ port });
         }
-        return { port, socketServer };
+        return { port };
     }
 
     async closeAll() {

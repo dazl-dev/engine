@@ -112,7 +112,9 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 this.clientIdToSocket.delete(clientId);
             }
             for (const handler of this.disconnectionHandlers) {
-                handler(clientId);
+                handler(clientId, (message: Message) => {
+                    this.postMessage(message);
+                });
             }
         });
     };
