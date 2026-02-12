@@ -61,9 +61,11 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
     private onConnection = (socket: io.Socket): void => {
         const clientId = socket.handshake.auth?.clientId || socket.id;
+        const existingSocket = this.clientIdToSocket.get(clientId);
+        
+        this.clientIdToSocket.set(clientId, socket);
 
         // disconnect previous connection
-        const existingSocket = this.clientIdToSocket.get(clientId);
         if (existingSocket && existingSocket.connected) {
             existingSocket.disconnect(true);
         }
@@ -73,8 +75,6 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 this.postMessage(message);
             });
         }
-
-        this.clientIdToSocket.set(clientId, socket);
 
         const nameSpace = (original: string) => `${clientId}/${original}`;
         const onMessage = (message: Message): void => {
@@ -110,11 +110,11 @@ export class WsServerHost extends BaseHost implements IDisposable {
             }
             if (this.clientIdToSocket.get(clientId) === socket) {
                 this.clientIdToSocket.delete(clientId);
-            }
-            for (const handler of this.disconnectionHandlers) {
-                handler(clientId, (message: Message) => {
-                    this.postMessage(message);
-                });
+                for (const handler of this.disconnectionHandlers) {
+                    handler(clientId, (message: Message) => {
+                        this.postMessage(message);
+                    });
+                }
             }
         });
     };
