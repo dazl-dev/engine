@@ -1,7 +1,7 @@
 import type io from 'socket.io';
 import { BaseHost, type Message } from '@dazl/engine-core';
 import { SafeDisposable, type IDisposable } from '@dazl/patterns';
-import type { ILaunchHttpServerOptions } from './launch-http-server.js';
+import type { IConnectionCloseHandler, IConnectionOpenHandler } from './launch-http-server.js';
 
 export class WsHost extends BaseHost {
     constructor(private socket: io.Socket) {
@@ -16,8 +16,8 @@ export class WsHost extends BaseHost {
 }
 
 export class WsServerHost extends BaseHost implements IDisposable {
-    private connectionHandlers = new Set<Required<ILaunchHttpServerOptions>['onConnectionOpen']>();
-    private disconnectionHandlers = new Set<Required<ILaunchHttpServerOptions>['onConnectionClose']>();
+    private connectionHandlers = new Set<IConnectionOpenHandler>();
+    private disconnectionHandlers = new Set<IConnectionCloseHandler>();
     private socketToEnvId = new Map<string, { socket: io.Socket; clientID: string }>();
     private clientIdToSocket = new Map<string, io.Socket>();
     private disposables = new SafeDisposable(WsServerHost.name);
@@ -31,14 +31,14 @@ export class WsServerHost extends BaseHost implements IDisposable {
         this.disposables.add('clear handlers', () => this.handlers.clear());
     }
 
-    public registerConnectionHandler(handler: Required<ILaunchHttpServerOptions>['onConnectionOpen']) {
+    public registerConnectionHandler(handler: IConnectionOpenHandler) {
         this.connectionHandlers.add(handler);
         return () => {
             this.connectionHandlers.delete(handler);
         };
     }
 
-    public registerDisconnectionHandler(handler: Required<ILaunchHttpServerOptions>['onConnectionClose']) {
+    public registerDisconnectionHandler(handler: IConnectionCloseHandler) {
         this.disconnectionHandlers.add(handler);
         return () => {
             this.disconnectionHandlers.delete(handler);
@@ -110,15 +110,14 @@ export class WsServerHost extends BaseHost implements IDisposable {
                     });
                 }
             }
-            const isActiveConnectionClosed = this.clientIdToSocket.get(clientId) === socket;
-            if (isActiveConnectionClosed) {
+            if (this.clientIdToSocket.get(clientId) === socket) {
                 this.clientIdToSocket.delete(clientId);
             }
             for (const handler of this.disconnectionHandlers) {
                 handler({
                     clientId,
                     postMessage: (message: Message) => this.postMessage(message),
-                    hasActiveConnection: !isActiveConnectionClosed,
+                    hasActiveConnection: this.clientIdToSocket.has(clientId),
                     socket,
                 });
             }

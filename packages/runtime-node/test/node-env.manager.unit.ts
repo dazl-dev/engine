@@ -2,7 +2,8 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 import { BaseHost, COM, Communication, WsClientHost } from '@dazl/engine-core';
 import {
-    ILaunchHttpServerOptions,
+    IConnectionCloseHandler,
+    IConnectionOpenHandler,
     launchEngineHttpServer,
     NodeEnvManager,
     type NodeEnvsFeatureMapping,
@@ -194,9 +195,7 @@ describe('NodeEnvManager', () => {
 
             // Verify connection handler was called
             expect(connectionHandler.callCount).to.equal(1);
-            const [args1] = connectionHandler.firstCall.args as Parameters<
-                Required<ILaunchHttpServerOptions>['onConnectionOpen']
-            >;
+            const [args1] = connectionHandler.firstCall.args as Parameters<IConnectionOpenHandler>;
             expect(args1.clientId).to.equal(initialClientId);
             expect(args1.socket).to.have.property('id');
             expect(args1.postMessage).to.be.a('function');
@@ -220,9 +219,7 @@ describe('NodeEnvManager', () => {
 
             // Verify connection handler was called
             expect(connectionHandler.callCount).to.equal(2);
-            const [args2] = connectionHandler.secondCall.args as Parameters<
-                Required<ILaunchHttpServerOptions>['onConnectionOpen']
-            >;
+            const [args2] = connectionHandler.secondCall.args as Parameters<IConnectionOpenHandler>;
             expect(args2.clientId).to.equal(initialClientId);
             expect(args2.socket).to.have.property('id');
             expect(args2.postMessage).to.be.a('function');
@@ -231,9 +228,7 @@ describe('NodeEnvManager', () => {
             // Verify disconnection handler was called after the client connection was replaced
             await waitDisconnectFirstSocket;
             expect(disconnectionHandler.callCount).to.equal(1);
-            const [disconnectArgs1] = disconnectionHandler.firstCall.args as Parameters<
-                Required<ILaunchHttpServerOptions>['onConnectionClose']
-            >;
+            const [disconnectArgs1] = disconnectionHandler.firstCall.args as Parameters<IConnectionCloseHandler>;
             expect(disconnectArgs1.clientId).to.equal(initialClientId);
             expect(disconnectArgs1.postMessage).to.be.a('function');
             expect(disconnectArgs1.socket.id).to.equal(args1.socket.id);
@@ -249,9 +244,7 @@ describe('NodeEnvManager', () => {
 
             // Verify disconnection handler for active connection was called
             expect(disconnectionHandler.callCount).to.equal(2);
-            const [disconnectArgs2] = disconnectionHandler.secondCall.args as Parameters<
-                Required<ILaunchHttpServerOptions>['onConnectionClose']
-            >;
+            const [disconnectArgs2] = disconnectionHandler.secondCall.args as Parameters<IConnectionCloseHandler>;
             expect(disconnectArgs2.clientId).to.equal(initialClientId);
             expect(disconnectArgs2.postMessage).to.be.a('function');
             expect(disconnectArgs2.hasActiveConnection).to.equal(false);
