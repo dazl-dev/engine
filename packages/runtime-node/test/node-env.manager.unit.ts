@@ -1,4 +1,6 @@
 import { expect } from 'chai';
+import sinon from 'sinon';
+import type io from 'socket.io';
 import { BaseHost, COM, Communication, WsClientHost } from '@dazl/engine-core';
 import {
     launchEngineHttpServer,
@@ -150,6 +152,67 @@ describe('NodeEnvManager', () => {
             const api = communication.apiProxy<EchoService>({ id: bEnv.env }, { id: 'test-feature.echoBService' });
 
             expect(await api.echoChained()).to.equal('a');
+        });
+    });
+
+    describe('NodeEnvManager with connection handlers', () => {
+        it('should call connection and disconnection handlers', async () => {
+            const connectionHandler = sinon.spy();
+            const disconnectionHandler = sinon.spy();
+
+            const featureEnvironmentsMapping: NodeEnvsFeatureMapping = {
+                featureToEnvironments: {
+                    'test-feature': [aEnv.env],
+                },
+                availableEnvironments: {
+                    a: {
+                        env: aEnv.env,
+                        endpointType: 'single',
+                        envType: 'node',
+                    },
+                },
+            };
+
+            const manager = disposeAfterTest(new NodeEnvManager(meta, featureEnvironmentsMapping));
+            const { port } = await manager.autoLaunch(new Map([['feature', 'test-feature']]), {
+                onConnectionOpen: connectionHandler,
+                onConnectionClose: disconnectionHandler,
+            });
+
+            // Create a client connection
+            const host = new WsClientHost('http://localhost:' + port, {});
+            const communication = new Communication(new BaseHost(), testCommunicationId);
+            communication.registerEnv(aEnv.env, host);
+            communication.registerMessageHandler(host);
+
+            await host.connected;
+
+            // Verify connection handler was called
+            expect(connectionHandler.callCount).to.equal(1);
+            const [clientId, socket, postMessage] = connectionHandler.firstCall.args;
+            expect(clientId).to.be.a('string');
+            expect(socket).to.have.property('id');
+            expect(postMessage).to.be.a('function');
+
+            // Disconnect the client
+            host.disconnectSocket();
+
+            let disconnectResolve: () => void;
+            const disconnectPromise = new Promise<void>((resolve) => {
+                disconnectResolve = resolve;
+            });
+            (socket as io.Socket).on('disconnect', () => {
+                disconnectResolve();
+            });
+            await disconnectPromise;
+
+            // Verify disconnection handler was called
+            expect(disconnectionHandler.callCount).to.equal(1);
+            const [disconnectedClientId, disconnectPostMessage] = disconnectionHandler.firstCall.args;
+            expect(disconnectedClientId).to.equal(clientId);
+            expect(disconnectPostMessage).to.be.a('function');
+
+            await communication.dispose();
         });
     });
 
