@@ -195,15 +195,12 @@ describe('NodeEnvManager', () => {
             expect(postMessage).to.be.a('function');
 
             // Disconnect the client
-            let disconnectResolve: () => void;
-            const disconnectPromise = new Promise<void>((resolve) => {
-                disconnectResolve = resolve;
+            await new Promise<void>((resolve) => {
+                (socket as io.Socket).on('disconnect', () => {
+                    resolve();
+                });
+                host.disconnectSocket();
             });
-            (socket as io.Socket).on('disconnect', () => {
-                disconnectResolve();
-            });
-            host.disconnectSocket();
-            await disconnectPromise;
 
             // Verify disconnection handler was called
             expect(disconnectionHandler.callCount).to.equal(1);
