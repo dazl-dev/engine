@@ -180,7 +180,12 @@ describe('NodeEnvManager', () => {
             });
 
             // Create a client connection
-            const host = new WsClientHost('http://localhost:' + port, {});
+            const initialClientId = 'test-client-id';
+            const host = new WsClientHost('http://localhost:' + port, {
+                auth: {
+                    clientId: initialClientId,
+                },
+            });
             const communication = new Communication(new BaseHost(), testCommunicationId);
             communication.registerEnv(aEnv.env, host);
             communication.registerMessageHandler(host);
@@ -190,7 +195,7 @@ describe('NodeEnvManager', () => {
             // Verify connection handler was called
             expect(connectionHandler.callCount).to.equal(1);
             const [clientId, socket, postMessage] = connectionHandler.firstCall.args;
-            expect(clientId).to.be.a('string');
+            expect(clientId).to.equal(initialClientId);
             expect(socket).to.have.property('id');
             expect(postMessage).to.be.a('function');
 
