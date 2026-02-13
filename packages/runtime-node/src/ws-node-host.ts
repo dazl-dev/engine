@@ -1,7 +1,7 @@
 import type io from 'socket.io';
-import { BaseHost, type Message } from '@dazl/engine-core';
+import { BaseHost, LoggerService, LogLevel, type Message } from '@dazl/engine-core';
 import { SafeDisposable, type IDisposable } from '@dazl/patterns';
-import type { IConnectionCloseHandler, IConnectionOpenHandler } from './launch-http-server.js';
+import type { IConnectionEvent, IConnectionHandler } from './launch-http-server.js';
 
 export class WsHost extends BaseHost {
     constructor(private socket: io.Socket) {
@@ -16,11 +16,13 @@ export class WsHost extends BaseHost {
 }
 
 export class WsServerHost extends BaseHost implements IDisposable {
-    private connectionHandlers = new Set<IConnectionOpenHandler>();
-    private disconnectionHandlers = new Set<IConnectionCloseHandler>();
+    private connectionHandlers = new Set<IConnectionHandler>();
+    private disconnectionHandlers = new Set<IConnectionHandler>();
+    private reconnectionHandlers = new Set<IConnectionHandler>();
     private socketToEnvId = new Map<string, { socket: io.Socket; clientID: string }>();
     private clientIdToSocket = new Map<string, io.Socket>();
     private disposables = new SafeDisposable(WsServerHost.name);
+    private logger = new LoggerService([], {}, { logToConsole: true, severity: LogLevel.DEBUG });
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
 
@@ -31,17 +33,24 @@ export class WsServerHost extends BaseHost implements IDisposable {
         this.disposables.add('clear handlers', () => this.handlers.clear());
     }
 
-    public registerConnectionHandler(handler: IConnectionOpenHandler) {
+    public registerConnectionHandler(handler: IConnectionHandler) {
         this.connectionHandlers.add(handler);
         return () => {
             this.connectionHandlers.delete(handler);
         };
     }
 
-    public registerDisconnectionHandler(handler: IConnectionCloseHandler) {
+    public registerDisconnectionHandler(handler: IConnectionHandler) {
         this.disconnectionHandlers.add(handler);
         return () => {
             this.disconnectionHandlers.delete(handler);
+        };
+    }
+
+    public registerReconnectionHandler(handler: IConnectionHandler) {
+        this.reconnectionHandlers.add(handler);
+        return () => {
+            this.reconnectionHandlers.delete(handler);
         };
     }
 
@@ -59,23 +68,35 @@ export class WsServerHost extends BaseHost implements IDisposable {
         }
     }
 
+    private callWithErrorHandling(callback: () => void): void {
+        try {
+            callback();
+        } catch (error) {
+            this.logger.error(error instanceof Error ? `${error.message} ${error.stack}` : String(error));
+        }
+    }
+
     private onConnection = (socket: io.Socket): void => {
         const clientId = socket.handshake.auth?.clientId || socket.id;
         const existingSocket = this.clientIdToSocket.get(clientId);
 
         this.clientIdToSocket.set(clientId, socket);
 
-        // disconnect previous connection
-        if (existingSocket && existingSocket.connected) {
-            existingSocket.disconnect(true);
-        }
+        const connectionEvent: IConnectionEvent = {
+            clientId,
+            socket,
+            postMessage: (message: Message) => this.postMessage(message),
+        };
 
-        for (const handler of this.connectionHandlers) {
-            handler({
-                clientId,
-                socket,
-                postMessage: (message: Message) => this.postMessage(message),
-            });
+        if (existingSocket && existingSocket.connected) {
+            existingSocket.disconnect(true); // disconnect previous connection
+            for (const handler of this.reconnectionHandlers) {
+                this.callWithErrorHandling(() => handler(connectionEvent));
+            }
+        } else {
+            for (const handler of this.connectionHandlers) {
+                this.callWithErrorHandling(() => handler(connectionEvent));
+            }
         }
 
         const nameSpace = (original: string) => `${clientId}/${original}`;
@@ -112,14 +133,9 @@ export class WsServerHost extends BaseHost implements IDisposable {
             }
             if (this.clientIdToSocket.get(clientId) === socket) {
                 this.clientIdToSocket.delete(clientId);
-            }
-            for (const handler of this.disconnectionHandlers) {
-                handler({
-                    clientId,
-                    postMessage: (message: Message) => this.postMessage(message),
-                    hasActiveConnection: this.clientIdToSocket.has(clientId),
-                    socket,
-                });
+                for (const handler of this.disconnectionHandlers) {
+                    this.callWithErrorHandling(() => handler(connectionEvent));
+                }
             }
         });
     };

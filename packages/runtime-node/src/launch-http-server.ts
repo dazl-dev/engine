@@ -16,17 +16,12 @@ export interface RouteMiddleware {
     handlers: express.RequestHandler | express.RequestHandler[];
 }
 
-export interface IConnectionOpenEvent {
+export interface IConnectionEvent {
     clientId: string;
     socket: io.Socket;
     postMessage: (message: Message) => void;
 }
-export type IConnectionOpenHandler = (event: IConnectionOpenEvent) => void;
-
-export interface IConnectionCloseEvent extends IConnectionOpenEvent {
-    hasActiveConnection: boolean;
-}
-export type IConnectionCloseHandler = (event: IConnectionCloseEvent) => void;
+export type IConnectionHandler = (event: IConnectionEvent) => void;
 
 export interface ILaunchHttpServerOptions {
     staticDirPath?: string;
@@ -34,8 +29,9 @@ export interface ILaunchHttpServerOptions {
     socketServerOptions?: Partial<io.ServerOptions>;
     routeMiddlewares?: Array<RouteMiddleware>;
     hostname?: string;
-    onConnectionOpen?: IConnectionOpenHandler;
-    onConnectionClose?: IConnectionCloseHandler;
+    onConnectionOpen?: IConnectionHandler;
+    onConnectionClose?: IConnectionHandler;
+    onConnectionReconnect?: IConnectionHandler;
 }
 
 export async function launchEngineHttpServer({

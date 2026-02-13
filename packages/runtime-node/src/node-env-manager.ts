@@ -66,9 +66,13 @@ export class NodeEnvManager implements IDisposable {
         const disposeOnConnectionClose = serverOptions.onConnectionClose
             ? clientsHost.registerDisconnectionHandler(serverOptions.onConnectionClose)
             : undefined;
+        const disposeOnReconnection = serverOptions.onConnectionReconnect
+            ? clientsHost.registerReconnectionHandler(serverOptions.onConnectionReconnect)
+            : undefined;
         const disposeConnectionHandlers = () => {
             disposeOnConnectionOpen?.();
             disposeOnConnectionClose?.();
+            disposeOnReconnection?.();
         };
         clientsHost.addEventListener('message', handleRegistrationOnMessage);
         const forwardingCom = new Communication(clientsHost, 'clients-host-com');
