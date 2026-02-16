@@ -176,9 +176,11 @@ describe('NodeEnvManager', () => {
 
             const manager = disposeAfterTest(new NodeEnvManager(meta, featureEnvironmentsMapping));
             const { port } = await manager.autoLaunch(new Map([['feature', 'test-feature']]), {
-                onConnectionOpen: connectionHandler,
-                onConnectionClose: disconnectionHandler,
-                onConnectionReconnect: reconnectionHandler,
+                connectionHandlers: {
+                    onConnectionOpen: connectionHandler,
+                    onConnectionClose: disconnectionHandler,
+                    onConnectionReconnect: reconnectionHandler,
+                },
             });
 
             // Create a client connection 1
@@ -199,7 +201,6 @@ describe('NodeEnvManager', () => {
             const [args1] = connectionHandler.firstCall.args as Parameters<IConnectionHandler>;
             expect(args1.clientId).to.equal(initialClientId);
             expect(args1.socket).to.have.property('id');
-            expect(args1.postMessage).to.be.a('function');
 
             // Replace a client connection
             const waitDisconnectFirstSocket = new Promise<void>((resolve) => {
@@ -223,7 +224,6 @@ describe('NodeEnvManager', () => {
             const [args2] = reconnectionHandler.firstCall.args as Parameters<IConnectionHandler>;
             expect(args2.clientId).to.equal(initialClientId);
             expect(args2.socket).to.have.property('id');
-            expect(args2.postMessage).to.be.a('function');
             expect(args2.socket.id).to.not.equal(args1.socket.id);
 
             // Verify disconnection handler was not called after the client connection was replaced
@@ -242,7 +242,6 @@ describe('NodeEnvManager', () => {
             expect(disconnectionHandler.callCount).to.equal(1);
             const [disconnectArgs1] = disconnectionHandler.firstCall.args as Parameters<IConnectionHandler>;
             expect(disconnectArgs1.clientId).to.equal(initialClientId);
-            expect(disconnectArgs1.postMessage).to.be.a('function');
             expect(disconnectArgs1.socket.id).to.equal(args2.socket.id);
 
             await communication1.dispose();

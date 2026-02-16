@@ -1,7 +1,18 @@
 import type io from 'socket.io';
 import { BaseHost, LoggerService, LogLevel, type Message } from '@dazl/engine-core';
 import { SafeDisposable, type IDisposable } from '@dazl/patterns';
-import type { IConnectionEvent, IConnectionHandler } from './launch-http-server.js';
+
+export interface IConnectionEvent {
+    clientId: string;
+    socket: io.Socket;
+}
+export type IConnectionHandler = (event: IConnectionEvent) => void;
+
+export interface ConnectionHandlers {
+    onConnectionOpen?: IConnectionHandler;
+    onConnectionClose?: IConnectionHandler;
+    onConnectionReconnect?: IConnectionHandler;
+}
 
 export class WsHost extends BaseHost {
     constructor(private socket: io.Socket) {
@@ -85,7 +96,6 @@ export class WsServerHost extends BaseHost implements IDisposable {
         const connectionEvent: IConnectionEvent = {
             clientId,
             socket,
-            postMessage: (message: Message) => this.postMessage(message),
         };
 
         if (existingSocket && existingSocket.connected) {
