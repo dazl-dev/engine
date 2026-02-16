@@ -97,7 +97,7 @@ function getValue(message: LogValue): LogValueData {
     return logValue;
 }
 
-function logToConsole({ message, metadata = {}, level }: LogMessage): void {
+export function logToConsole({ message, metadata = {}, level }: LogMessage): void {
     switch (level) {
         case LogLevel.DEBUG:
             console.log(message, metadata);

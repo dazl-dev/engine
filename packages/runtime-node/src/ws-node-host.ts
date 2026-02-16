@@ -1,5 +1,5 @@
 import type io from 'socket.io';
-import { BaseHost, LoggerService, LogLevel, type Message } from '@dazl/engine-core';
+import { BaseHost, LogLevel, logToConsole, type Message } from '@dazl/engine-core';
 import { SafeDisposable, type IDisposable } from '@dazl/patterns';
 
 export interface IConnectionEvent {
@@ -33,7 +33,6 @@ export class WsServerHost extends BaseHost implements IDisposable {
     private socketToEnvId = new Map<string, { socket: io.Socket; clientID: string }>();
     private clientIdToSocket = new Map<string, io.Socket>();
     private disposables = new SafeDisposable(WsServerHost.name);
-    private logger = new LoggerService([], {}, { logToConsole: true, severity: LogLevel.DEBUG });
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
 
@@ -83,7 +82,11 @@ export class WsServerHost extends BaseHost implements IDisposable {
         try {
             callback();
         } catch (error) {
-            this.logger.error(error instanceof Error ? `${error.message} ${error.stack}` : String(error));
+            logToConsole({
+                message: error instanceof Error ? `${error.message} ${error.stack}` : String(error),
+                level: LogLevel.ERROR,
+                timestamp: Date.now(),
+            });
         }
     }
 
