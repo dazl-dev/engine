@@ -41,6 +41,9 @@ export class WsServerHost extends BaseHost implements IDisposable {
         this.server.on('connection', this.onConnection);
         this.disposables.add('connection', () => this.server.off('connection', this.onConnection));
         this.disposables.add('clear handlers', () => this.handlers.clear());
+        this.disposables.add('clear connection handlers', () => this.connectionHandlers.clear());
+        this.disposables.add('clear disconnection handlers', () => this.disconnectionHandlers.clear());
+        this.disposables.add('clear reconnection handlers', () => this.reconnectionHandlers.clear());
     }
 
     public registerConnectionHandler(handler: IConnectionHandler) {
