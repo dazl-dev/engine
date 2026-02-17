@@ -10,7 +10,7 @@ import { IDisposable, SetMultiMap } from '@dazl/patterns';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { extname } from 'node:path';
-import { WsServerHost } from './ws-node-host.js';
+import { ConnectionHandlers, WsServerHost } from './ws-node-host.js';
 import { ILaunchHttpServerOptions, launchEngineHttpServer } from './launch-http-server.js';
 import { workerThreadInitializer2 } from './worker-thread-initializer2.js';
 import { bindMetricsListener, type PerformanceMetrics } from './metrics-utils.js';
@@ -49,7 +49,12 @@ export class NodeEnvManager implements IDisposable {
     ) {}
     public async autoLaunch(
         runtimeOptions: Map<string, string | boolean | undefined>,
-        serverOptions: ILaunchHttpServerOptions = {},
+        {
+            connectionHandlers,
+            ...serverOptions
+        }: ILaunchHttpServerOptions & {
+            connectionHandlers?: ConnectionHandlers;
+        } = {},
     ) {
         process.env.ENGINE_FLOW_V2_DIST_URL = this.importMeta.url;
         const disposeMetricsListener = bindMetricsListener(() => this.collectMetricsFromAllOpenEnvironments());
@@ -60,6 +65,20 @@ export class NodeEnvManager implements IDisposable {
         runtimeOptions.set('enginePort', port.toString());
 
         const clientsHost = new WsServerHost(socketServer);
+        const disposeOnConnectionOpen = connectionHandlers?.onConnectionOpen
+            ? clientsHost.registerConnectionHandler(connectionHandlers.onConnectionOpen)
+            : undefined;
+        const disposeOnConnectionClose = connectionHandlers?.onConnectionClose
+            ? clientsHost.registerDisconnectionHandler(connectionHandlers.onConnectionClose)
+            : undefined;
+        const disposeOnReconnection = connectionHandlers?.onConnectionReconnect
+            ? clientsHost.registerReconnectionHandler(connectionHandlers.onConnectionReconnect)
+            : undefined;
+        const disposeConnectionHandlers = () => {
+            disposeOnConnectionOpen?.();
+            disposeOnConnectionClose?.();
+            disposeOnReconnection?.();
+        };
         clientsHost.addEventListener('message', handleRegistrationOnMessage);
         const forwardingCom = new Communication(clientsHost, 'clients-host-com');
         function handleRegistrationOnMessage({ data }: { data: Message }) {
@@ -84,6 +103,7 @@ export class NodeEnvManager implements IDisposable {
             disposeMetricsListener();
             await this.closeAll();
             clientsHost.removeEventListener('message', handleRegistrationOnMessage);
+            disposeConnectionHandlers();
             await clientsHost.dispose();
             await close();
         };
