@@ -63,6 +63,7 @@ export class RuntimeEngine<ENV extends AnyEnvironment = AnyEnvironment> {
             try {
                 await this.shutdown();
             } catch (e2) {
+                // eslint-disable-next-line preserve-caught-error
                 throw new AggregateError([e, e2], 'Failed to shutdown engine after error in run phase');
             }
             throw e;

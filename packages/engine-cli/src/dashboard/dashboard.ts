@@ -228,7 +228,7 @@ function validateRuntimeArgs(runtimeArgs: string) {
     try {
         JSON.parse(runtimeArgs);
     } catch (e) {
-        throw new Error(`Invalid runtime args: ${e}`);
+        throw new Error(`Runtime args are not a valid JSON value`, { cause: e });
     }
 }
 
