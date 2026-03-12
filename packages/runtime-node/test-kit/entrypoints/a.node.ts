@@ -38,6 +38,11 @@ export function runEnv({
 
 if (workerData) {
     const unbindMetricsListener = bindMetricsListener();
+    let running: ReturnType<typeof runEnv>;
+    const unbindActivateListener = bindRpcListener('activate', () => {
+        unbindActivateListener();
+        running = runEnv();
+    });
     const unbindTerminationListener = bindRpcListener('terminate', async () => {
         if (verbose) {
             console.log(`[${env.env}]: Termination Requested. Waiting for engine.`);
@@ -55,8 +60,6 @@ if (workerData) {
             return;
         }
     });
-    // used by dispose to wait for engine to be ready
-    const running = runEnv();
 } else {
     console.log('running engine in test mode');
 }

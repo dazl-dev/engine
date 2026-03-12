@@ -3,11 +3,13 @@ import { Worker } from '@dazl/isomorphic-worker/worker';
 import { type UniversalWorkerOptions } from '@dazl/isomorphic-worker/types';
 import { createDisposables } from '@dazl/patterns';
 import { getMetricsFromWorker } from './metrics-utils.js';
-import { rpcCall } from './micro-rpc.js';
+import { rpcCall, rpcPost } from './micro-rpc.js';
 import type { RunningNodeEnvironment } from './node-env-manager.js';
 
 export interface WorkerThreadInitializer2 extends RunningNodeEnvironment {
     initialize: () => Promise<void>;
+    preLoad: () => void;
+    activate: () => Promise<void>;
 }
 
 export interface WorkerThreadInitializerOptions2 {
@@ -37,7 +39,8 @@ export function workerThreadInitializer2({
     const instanceId = communication.getEnvironmentInstanceId(env.env, env.endpointType);
     const envIsReady = communication.envReady(instanceId);
     let worker: Worker;
-    const initialize = async () => {
+
+    const preLoad = () => {
         const envRuntimeOptions = new Map(runtimeOptions?.entries());
         envRuntimeOptions.set('environment_id', instanceId);
 
@@ -73,13 +76,21 @@ export function workerThreadInitializer2({
             communication.clearEnvironment(instanceId);
             communication.removeMessageHandler(host);
         });
+    };
 
+    const activate = async () => {
+        rpcPost(worker, 'activate');
         await envIsReady;
     };
 
     return {
         id: instanceId,
-        initialize,
+        initialize: async () => {
+            preLoad();
+            await activate();
+        },
+        preLoad,
+        activate,
         dispose: () => disposables.dispose(),
         getMetrics: () => getMetricsFromWorker(worker),
     };
