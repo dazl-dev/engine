@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { timeout } from 'promise-assist';
 import { BaseHost, COM, Communication, WsClientHost } from '@dazl/engine-core';
 import {
     IConnectionHandler,
@@ -152,6 +153,45 @@ describe('NodeEnvManager', () => {
             const api = communication.apiProxy<EchoService>({ id: bEnv.env }, { id: 'test-feature.echoBService' });
 
             expect(await api.echoChained()).to.equal('a');
+        });
+    });
+
+    describe('NodeEnvManager with lazy activation', () => {
+        it('should not respond before activateEnvs and work after it', async () => {
+            const featureEnvironmentsMapping: NodeEnvsFeatureMapping = {
+                featureToEnvironments: {
+                    'test-feature': [aEnv.env, bEnv.env],
+                },
+                availableEnvironments: {
+                    a: {
+                        env: aEnv.env,
+                        endpointType: 'single',
+                        envType: 'node',
+                    },
+                    b: {
+                        env: bEnv.env,
+                        endpointType: 'single',
+                        envType: 'node',
+                    },
+                },
+            };
+
+            const manager = disposeAfterTest(new NodeEnvManager(meta, featureEnvironmentsMapping));
+            const { port } = await manager.autoLaunch(new Map([['feature', 'test-feature']]), {}, true);
+            const communication = disposeAfterTest(getClientCom(port));
+            const api = communication.apiProxy<EchoService>({ id: aEnv.env }, { id: 'test-feature.echoAService' });
+
+            // env should not respond before activation
+            const error = await timeout(api.echo(), 500).catch((e: Error) => e);
+            expect(error, 'uninitialized env')
+                .to.be.instanceOf(Error)
+                .with.property('message')
+                .that.includes('timed out');
+
+            // activate and verify env responds
+            await manager.activateEnvs();
+
+            expect(await api.echo()).to.equal('a');
         });
     });
 

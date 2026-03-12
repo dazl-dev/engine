@@ -19,6 +19,7 @@ export interface RunningNodeEnvironment {
     id: string;
     dispose(): Promise<void>;
     getMetrics(): Promise<PerformanceMetrics>;
+    activate?(): Promise<void>;
 }
 
 export interface NodeEnvConfig extends Pick<AnyEnvironment, 'env' | 'endpointType'> {
@@ -55,6 +56,7 @@ export class NodeEnvManager implements IDisposable {
         }: ILaunchHttpServerOptions & {
             connectionHandlers?: ConnectionHandlers;
         } = {},
+        lazy = false,
     ) {
         process.env.ENGINE_FLOW_V2_DIST_URL = this.importMeta.url;
         const disposeMetricsListener = bindMetricsListener(() => this.collectMetricsFromAllOpenEnvironments());
@@ -95,6 +97,10 @@ export class NodeEnvManager implements IDisposable {
         }
         await this.runFeatureEnvironments(verbose, runtimeOptions, forwardingCom);
 
+        if (!lazy) {
+            await this.activateEnvs();
+        }
+
         app.get('/health', (_req, res) => {
             res.status(200).end();
         });
@@ -118,6 +124,15 @@ export class NodeEnvManager implements IDisposable {
             process.send({ port });
         }
         return { port };
+    }
+
+    async activateEnvs() {
+        const activatedEnvs: Promise<void>[] = [];
+        for (const env of this.openEnvironments.values()) {
+            if (!env.activate) continue;
+            activatedEnvs.push(env.activate());
+        }
+        await Promise.all(activatedEnvs);
     }
 
     async closeAll() {
@@ -186,7 +201,7 @@ export class NodeEnvManager implements IDisposable {
                 workerURL: this.createEnvironmentFileUrl(envName),
                 runtimeOptions: runtimeOptions,
             });
-            await envWithInit.initialize();
+            envWithInit.preLoad();
             runningEnv = envWithInit;
         }
 

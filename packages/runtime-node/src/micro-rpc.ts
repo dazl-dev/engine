@@ -30,6 +30,11 @@ export function rpcCall<T>(worker: Worker, type: string, timeout = 10000): Promi
     return result;
 }
 
+export function rpcPost(worker: Worker, type: string, value?: unknown) {
+    const outgoingMessage = { type, id: getNextMessageId(), value };
+    worker.postMessage(outgoingMessage);
+}
+
 export function bindRpcListener<T>(type: string, customFetcher: () => Promise<T> | T) {
     const handler = async (message: unknown) => {
         if (isValidRpcMessage(message) && message.type === type) {
