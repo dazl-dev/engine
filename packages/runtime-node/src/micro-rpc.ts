@@ -40,7 +40,7 @@ export function bindRpcListener<T>(type: string, customFetcher: (value: unknown)
         if (isValidRpcMessage(message) && message.type === type) {
             const outgoingMessage = {
                 id: message.id,
-                value: await customFetcher('value' in message ? message.value : undefined),
+                value: await customFetcher(message.value),
             };
             if (parentPort) {
                 parentPort.postMessage(outgoingMessage);
@@ -60,7 +60,7 @@ export function bindRpcListener<T>(type: string, customFetcher: (value: unknown)
     };
 }
 
-export function isValidRpcMessage(message: unknown): message is { type: string; id: string } {
+export function isValidRpcMessage(message: unknown): message is { type: string; id: string; value?: unknown } {
     return !!(
         message &&
         typeof message === 'object' &&
