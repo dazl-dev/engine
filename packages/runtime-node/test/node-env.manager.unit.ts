@@ -193,6 +193,36 @@ describe('NodeEnvManager', () => {
 
             expect(await api.echo()).to.equal('a');
         });
+
+        it('should pass activate value to the worker', async () => {
+            const featureEnvironmentsMapping: NodeEnvsFeatureMapping = {
+                featureToEnvironments: {
+                    'test-feature': [aEnv.env, bEnv.env],
+                },
+                availableEnvironments: {
+                    a: {
+                        env: aEnv.env,
+                        endpointType: 'single',
+                        envType: 'node',
+                    },
+                    b: {
+                        env: bEnv.env,
+                        endpointType: 'single',
+                        envType: 'node',
+                    },
+                },
+            };
+
+            const manager = disposeAfterTest(new NodeEnvManager(meta, featureEnvironmentsMapping));
+            const { port } = await manager.autoLaunch(new Map([['feature', 'test-feature']]), {}, true);
+            const communication = disposeAfterTest(getClientCom(port));
+            const api = communication.apiProxy<EchoService>({ id: aEnv.env }, { id: 'test-feature.echoAService' });
+
+            const activateData = { hello: 'world' };
+            await manager.activateEnvs(activateData);
+
+            expect(await api.getActivateValue()).to.deep.equal(activateData);
+        });
     });
 
     describe('NodeEnvManager with connection handlers', () => {
