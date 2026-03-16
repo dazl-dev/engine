@@ -1,6 +1,6 @@
 {
   "name": "@dazl/engine-core",
-  "version": "52.0.0",
+  "version": "52.1.0",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
