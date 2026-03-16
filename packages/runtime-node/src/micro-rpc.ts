@@ -35,12 +35,12 @@ export function rpcPost(worker: Worker, type: string, value?: unknown) {
     worker.postMessage(outgoingMessage);
 }
 
-export function bindRpcListener<T>(type: string, customFetcher: () => Promise<T> | T) {
+export function bindRpcListener<T>(type: string, customFetcher: (value: unknown) => Promise<T> | T) {
     const handler = async (message: unknown) => {
         if (isValidRpcMessage(message) && message.type === type) {
             const outgoingMessage = {
                 id: message.id,
-                value: await customFetcher(),
+                value: await customFetcher('value' in message ? message.value : undefined),
             };
             if (parentPort) {
                 parentPort.postMessage(outgoingMessage);

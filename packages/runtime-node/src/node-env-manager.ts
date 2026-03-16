@@ -19,7 +19,7 @@ export interface RunningNodeEnvironment {
     id: string;
     dispose(): Promise<void>;
     getMetrics(): Promise<PerformanceMetrics>;
-    activate?(): Promise<void>;
+    activate?(value?: unknown): Promise<void>;
 }
 
 export interface NodeEnvConfig extends Pick<AnyEnvironment, 'env' | 'endpointType'> {
@@ -126,11 +126,11 @@ export class NodeEnvManager implements IDisposable {
         return { port };
     }
 
-    async activateEnvs() {
+    async activateEnvs(value?: unknown) {
         const activatedEnvs: Promise<void>[] = [];
         for (const env of this.openEnvironments.values()) {
             if (!env.activate) continue;
-            activatedEnvs.push(env.activate());
+            activatedEnvs.push(env.activate(value));
         }
         await Promise.all(activatedEnvs);
     }
