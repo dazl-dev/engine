@@ -13,6 +13,11 @@ if (verbose) {
     console.log(`[${env.env}: Started with options: `, options);
 }
 
+let activateValue: unknown;
+export function getActivateValue() {
+    return activateValue;
+}
+
 export function runEnv({
     Feature = TestFeature,
     topLevelConfig = [],
@@ -39,7 +44,8 @@ export function runEnv({
 if (workerData) {
     const unbindMetricsListener = bindMetricsListener();
     let running: ReturnType<typeof runEnv>;
-    const unbindActivateListener = bindRpcListener('activate', () => {
+    const unbindActivateListener = bindRpcListener('activate', (value: unknown) => {
+        activateValue = value;
         unbindActivateListener();
         running = runEnv();
     });

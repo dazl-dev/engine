@@ -9,7 +9,7 @@ import type { RunningNodeEnvironment } from './node-env-manager.js';
 export interface WorkerThreadInitializer2 extends RunningNodeEnvironment {
     initialize: () => Promise<void>;
     preLoad: () => void;
-    activate: () => Promise<void>;
+    activate: (value?: unknown) => Promise<void>;
 }
 
 export interface WorkerThreadInitializerOptions2 {
@@ -78,8 +78,8 @@ export function workerThreadInitializer2({
         });
     };
 
-    const activate = async () => {
-        rpcPost(worker, 'activate');
+    const activate = async (value?: unknown) => {
+        rpcPost(worker, 'activate', value);
         await envIsReady;
     };
 
