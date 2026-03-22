@@ -45,7 +45,7 @@
     "chai-as-promised": "^8.0.2",
     "create-temp-directory": "^2.4.0",
     "esbuild": "^0.27.4",
-    "eslint": "^10.0.3",
+    "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-no-only-tests": "^3.3.0",
     "eslint-plugin-react-hooks": "7.1.0-canary-e0cc7202-20260227",
