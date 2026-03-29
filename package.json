@@ -23,8 +23,8 @@
     "prettify": "prettier . --write"
   },
   "devDependencies": {
-    "@dazl/create-disposables": "^18.7.0",
-    "@dazl/wait-for-call": "^18.7.0",
+    "@dazl/create-disposables": "^18.9.0",
+    "@dazl/wait-for-call": "^18.9.0",
     "@eslint/js": "^10.0.1",
     "@file-services/memory": "^11.0.1",
     "@file-services/types": "^11.0.1",
