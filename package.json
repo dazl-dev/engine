@@ -45,7 +45,7 @@
     "chai-as-promised": "^8.0.2",
     "create-temp-directory": "^2.4.0",
     "esbuild": "^0.28.0",
-    "eslint": "^10.1.0",
+    "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-no-only-tests": "^3.3.0",
     "eslint-plugin-react-hooks": "7.1.0-canary-e0cc7202-20260227",
@@ -62,5 +62,10 @@
     "typescript-eslint": "^8.58.0",
     "typescript-type-utils": "^0.1.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "overrides": {
+    "sinon": {
+      "@sinonjs/fake-timers": "15.2.1"
+    }
+  }
 }
