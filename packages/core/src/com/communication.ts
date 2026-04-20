@@ -148,7 +148,7 @@ export class Communication {
         }
         const existingEnv = this.environments[id];
         if (!existingEnv || forceRegister) {
-            this.environments[id] = { id, host } as EnvironmentRecord;
+            this.environments[id] = { id, host };
         } else if (existingEnv.host !== host) {
             throw new DuplicateRegistrationError(id, 'Environment');
         }
