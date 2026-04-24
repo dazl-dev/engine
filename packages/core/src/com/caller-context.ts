@@ -1,5 +1,5 @@
 interface CallerContext {
-    getStore(): unknown;
+    getStore<T = unknown>(): T | undefined;
     run<R>(identity: unknown, callback: () => R): R;
 }
 let callerStore: CallerContext | undefined | null;
@@ -19,8 +19,8 @@ async function initCallerContext() {
     }
 }
 
-export function getCurrentCaller(): unknown {
-    return callerStore?.getStore();
+export function getCurrentCaller<T = unknown>(): T | undefined {
+    return callerStore?.getStore<T>();
 }
 
 export async function runWithCaller<R>(isNode: boolean, identity: unknown, fn: () => R): Promise<R> {

@@ -7,8 +7,16 @@ import type { Socket } from 'node:net';
 import { deferred } from 'promise-assist';
 import * as io from 'socket.io';
 
+interface Identity {
+    userId: string;
+}
+
 interface IIdentityTestApi {
-    whoAmI: () => unknown;
+    whoAmI: () => Identity | undefined;
+}
+
+interface IAsyncIdentityTestApi {
+    whoAmI: () => Promise<Identity | undefined>;
 }
 
 interface IGatedApi {
@@ -69,7 +77,7 @@ describe('Caller identity propagation', () => {
         serverCom.registerAPI<IIdentityTestApi>(
             { id: COMMUNICATION_ID },
             {
-                whoAmI: () => getCurrentCaller(),
+                whoAmI: () => getCurrentCaller<Identity>(),
             },
         );
 
@@ -110,9 +118,9 @@ describe('Caller identity propagation', () => {
             { id: COMMUNICATION_ID },
             {
                 callGated: async (label) => {
-                    const entry = getCurrentCaller();
+                    const entry = getCurrentCaller<Identity>();
                     await gates[label]!.promise;
-                    const exit = getCurrentCaller();
+                    const exit = getCurrentCaller<Identity>();
                     return { label, entry, exit };
                 },
             },
@@ -187,7 +195,7 @@ describe('Caller identity propagation', () => {
 
         workspaceCom.registerAPI<IIdentityTestApi>(
             { id: 'workspace-api' },
-            { whoAmI: () => getCurrentCaller() },
+            { whoAmI: () => getCurrentCaller<Identity>() },
         );
 
         const workspaceProxy = processingCom.apiProxy<IIdentityTestApi>(
@@ -195,7 +203,7 @@ describe('Caller identity propagation', () => {
             { id: 'workspace-api' },
         );
 
-        processingCom.registerAPI<IIdentityTestApi>(
+        processingCom.registerAPI<IAsyncIdentityTestApi>(
             { id: 'processing-api' },
             { whoAmI: () => workspaceProxy.whoAmI() },
         );
@@ -206,7 +214,7 @@ describe('Caller identity propagation', () => {
         await clientHost.connected;
         const clientCom = new Communication(clientHost, 'client-env', serverTopology);
 
-        const api = clientCom.apiProxy<IIdentityTestApi>({ id: 'processing-env' }, { id: 'processing-api' });
+        const api = clientCom.apiProxy<IAsyncIdentityTestApi>({ id: 'processing-env' }, { id: 'processing-api' });
 
         expect(await api.whoAmI()).to.deep.equal({ userId: 'u-99' });
     });
