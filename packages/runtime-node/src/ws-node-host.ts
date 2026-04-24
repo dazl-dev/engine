@@ -111,7 +111,9 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
         this.clientIdToSocket.set(clientId, socket);
         if (this.identityExtractor) {
-            this.identityStore.set(clientId, this.identityExtractor(socket.handshake));
+            this.callWithErrorHandling(() => {
+                this.identityStore.set(clientId, this.identityExtractor!(socket.handshake));
+            });
         }
 
         const connectionEvent: IConnectionEvent = {
