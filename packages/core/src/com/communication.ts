@@ -62,6 +62,7 @@ import {
     ReconnectFunction,
     RemoteValueListener,
 } from '../remote-value.js';
+import { getCurrentCaller, runWithCaller } from './caller-context.js';
 
 export interface ConfigEnvironmentRecord extends EnvironmentRecord {
     registerMessageHandler?: boolean;
@@ -373,6 +374,7 @@ export class Communication {
                     data: { api, method, args: serializeApiCallArguments(args) },
                     callbackId,
                     origin,
+                    callerIdentity: getCurrentCaller(),
                 };
                 this.callWithCallback(envId, message, callbackId, res, rej);
             }
@@ -698,6 +700,7 @@ export class Communication {
                 type: 'callback',
                 forwardingChain: message.forwardingChain,
                 error: new CircularForwardingError(message, this.rootEnvId, env.id),
+                callerIdentity: message.callerIdentity,
             });
             return;
         } else if (this.DEBUG) {
@@ -771,6 +774,7 @@ export class Communication {
                     },
                     handlerId: listenerHandlerId,
                     origin,
+                    callerIdentity: getCurrentCaller(),
                 };
                 // sometimes the callback will never happen since target environment is already dead
                 this.sendTo(envId, message);
@@ -802,6 +806,7 @@ export class Communication {
                         handlerId: '',
                         callbackId,
                         origin,
+                        callerIdentity: getCurrentCaller(),
                     };
                     message.handlerId = this.createHandlerRecord(envId, api, method, fn, message);
 
@@ -939,7 +944,9 @@ export class Communication {
         const dispatcher = this.eventDispatchers.get(namespacedHandlerId)?.dispatcher;
         if (dispatcher) {
             this.eventDispatchers.delete(namespacedHandlerId);
-            const data = await this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]);
+            const data = await runWithCaller(this.isServer, message.callerIdentity, () =>
+                this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]),
+            );
             if (message.callbackId) {
                 this.sendTo(message.from, {
                     to: message.from,
@@ -957,7 +964,9 @@ export class Communication {
         try {
             const dispatcher = this.getDispatcher(message.from, message);
 
-            const data = await this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]);
+            const data = await runWithCaller(this.isServer, message.callerIdentity, () =>
+                this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]),
+            );
 
             if (message.callbackId) {
                 this.sendTo(message.from, {
@@ -984,7 +993,9 @@ export class Communication {
     private async handleCall(message: CallMessage): Promise<void> {
         try {
             const args = deserializeApiCallArguments(message.data.args);
-            const data = await this.apiCall(message.origin, message.data.api, message.data.method, args);
+            const data = await runWithCaller(this.isServer, message.callerIdentity, () =>
+                this.apiCall(message.origin, message.data.api, message.data.method, args),
+            );
 
             if (message.callbackId) {
                 this.sendTo(message.from, {

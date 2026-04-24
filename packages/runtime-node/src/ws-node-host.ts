@@ -14,6 +14,12 @@ export interface ConnectionHandlers {
     onConnectionReconnect?: IConnectionHandler;
 }
 
+/**
+ * Extracts caller identity from Socket.IO handshake.
+ * Returned value must be serializable (JSON-safe) since it is added to messages.
+ */
+export type IdentityExtractor<T = unknown> = (handshake: io.Socket['handshake']) => T;
+
 export class WsHost extends BaseHost {
     constructor(private socket: io.Socket) {
         super();
@@ -32,6 +38,8 @@ export class WsServerHost extends BaseHost implements IDisposable {
     private reconnectionHandlers = new Set<IConnectionHandler>();
     private socketToEnvId = new Map<string, { socket: io.Socket; clientID: string }>();
     private clientIdToSocket = new Map<string, io.Socket>();
+    private identityStore = new Map<string, unknown>();
+    private identityExtractor?: IdentityExtractor;
     private disposables = new SafeDisposable(WsServerHost.name);
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
@@ -44,6 +52,10 @@ export class WsServerHost extends BaseHost implements IDisposable {
         this.disposables.add('clear connection handlers', () => this.connectionHandlers.clear());
         this.disposables.add('clear disconnection handlers', () => this.disconnectionHandlers.clear());
         this.disposables.add('clear reconnection handlers', () => this.reconnectionHandlers.clear());
+    }
+
+    public setIdentityExtractor(extractor: IdentityExtractor) {
+        this.identityExtractor = extractor;
     }
 
     public registerConnectionHandler(handler: IConnectionHandler) {
@@ -98,6 +110,9 @@ export class WsServerHost extends BaseHost implements IDisposable {
         const existingSocket = this.clientIdToSocket.get(clientId);
 
         this.clientIdToSocket.set(clientId, socket);
+        if (this.identityExtractor) {
+            this.identityStore.set(clientId, this.identityExtractor(socket.handshake));
+        }
 
         const connectionEvent: IConnectionEvent = {
             clientId,
@@ -128,6 +143,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
             // modify message to be able to forward it
             message.from = fromId;
             message.origin = originId;
+            message.callerIdentity = this.identityStore.get(clientId); // 'callerIdentity' must be always set on server side to avoid spoofing from client
 
             this.emitMessageHandlers(message);
         };
@@ -149,6 +165,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
             }
             if (this.clientIdToSocket.get(clientId) === socket) {
                 this.clientIdToSocket.delete(clientId);
+                this.identityStore.delete(clientId);
                 for (const handler of this.disconnectionHandlers) {
                     this.callWithErrorHandling(() => handler(connectionEvent));
                 }

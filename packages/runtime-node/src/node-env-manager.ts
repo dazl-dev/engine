@@ -10,7 +10,7 @@ import { IDisposable, SetMultiMap } from '@dazl/patterns';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { extname } from 'node:path';
-import { ConnectionHandlers, WsServerHost } from './ws-node-host.js';
+import { ConnectionHandlers, IdentityExtractor, WsServerHost } from './ws-node-host.js';
 import { ILaunchHttpServerOptions, launchEngineHttpServer } from './launch-http-server.js';
 import { workerThreadInitializer2 } from './worker-thread-initializer2.js';
 import { bindMetricsListener, type PerformanceMetrics } from './metrics-utils.js';
@@ -52,9 +52,11 @@ export class NodeEnvManager implements IDisposable {
         runtimeOptions: Map<string, string | boolean | undefined>,
         {
             connectionHandlers,
+            identityExtractor,
             ...serverOptions
         }: ILaunchHttpServerOptions & {
             connectionHandlers?: ConnectionHandlers;
+            identityExtractor?: IdentityExtractor;
         } = {},
         lazy = false,
     ) {
@@ -67,6 +69,9 @@ export class NodeEnvManager implements IDisposable {
         runtimeOptions.set('enginePort', port.toString());
 
         const clientsHost = new WsServerHost(socketServer);
+        if (identityExtractor) {
+            clientsHost.setIdentityExtractor(identityExtractor);
+        }
         const disposeOnConnectionOpen = connectionHandlers?.onConnectionOpen
             ? clientsHost.registerConnectionHandler(connectionHandlers.onConnectionOpen)
             : undefined;
