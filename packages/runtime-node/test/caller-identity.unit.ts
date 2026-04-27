@@ -1,22 +1,19 @@
 import { createDisposables } from '@dazl/create-disposables';
-import { BaseHost, Communication, WsClientHost, getCurrentCaller } from '@dazl/engine-core';
+import { BaseHost, Communication, WsClientHost, getCurrentCaller, setActiveCallerContext } from '@dazl/engine-core';
 import { WsServerHost } from '@dazl/engine-runtime-node';
 import { expect } from 'chai';
 import { safeListeningHttpServer } from 'create-listening-server';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Socket } from 'node:net';
 import { deferred } from 'promise-assist';
 import * as io from 'socket.io';
 
-interface Identity {
-    userId: string;
-}
-
 interface IIdentityTestApi {
-    whoAmI: () => Identity | undefined;
+    whoAmI: () => unknown;
 }
 
 interface IAsyncIdentityTestApi {
-    whoAmI: () => Promise<Identity | undefined>;
+    whoAmI: () => Promise<unknown>;
 }
 
 interface IGatedApi {
@@ -39,6 +36,8 @@ describe('Caller identity propagation', () => {
     afterEach(() => disposables.dispose());
 
     beforeEach(async () => {
+        setActiveCallerContext(new AsyncLocalStorage());
+        disposables.add(() => setActiveCallerContext(undefined));
         const { httpServer: server, port: servingPort } = await safeListeningHttpServer(3060);
         port = servingPort;
         socketServer = new io.Server(server, { cors: {} });
@@ -77,7 +76,7 @@ describe('Caller identity propagation', () => {
         serverCom.registerAPI<IIdentityTestApi>(
             { id: COMMUNICATION_ID },
             {
-                whoAmI: () => getCurrentCaller<Identity>(),
+                whoAmI: () => getCurrentCaller(),
             },
         );
 
@@ -118,9 +117,9 @@ describe('Caller identity propagation', () => {
             { id: COMMUNICATION_ID },
             {
                 callGated: async (label) => {
-                    const entry = getCurrentCaller<Identity>();
+                    const entry = getCurrentCaller();
                     await gates[label]!.promise;
-                    const exit = getCurrentCaller<Identity>();
+                    const exit = getCurrentCaller();
                     return { label, entry, exit };
                 },
             },
@@ -193,10 +192,7 @@ describe('Caller identity propagation', () => {
 
         const workspaceCom = new Communication(innerBus, 'workspace-env', {}, {}, true);
 
-        workspaceCom.registerAPI<IIdentityTestApi>(
-            { id: 'workspace-api' },
-            { whoAmI: () => getCurrentCaller<Identity>() },
-        );
+        workspaceCom.registerAPI<IIdentityTestApi>({ id: 'workspace-api' }, { whoAmI: () => getCurrentCaller() });
 
         const workspaceProxy = processingCom.apiProxy<IIdentityTestApi>(
             { id: 'workspace-env' },

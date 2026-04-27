@@ -944,7 +944,7 @@ export class Communication {
         const dispatcher = this.eventDispatchers.get(namespacedHandlerId)?.dispatcher;
         if (dispatcher) {
             this.eventDispatchers.delete(namespacedHandlerId);
-            const data = await runWithCaller(this.isServer, message.callerIdentity, () =>
+            const data = await runWithCaller(message.callerIdentity, () =>
                 this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]),
             );
             if (message.callbackId) {
@@ -964,7 +964,7 @@ export class Communication {
         try {
             const dispatcher = this.getDispatcher(message.from, message);
 
-            const data = await runWithCaller(this.isServer, message.callerIdentity, () =>
+            const data = await runWithCaller(message.callerIdentity, () =>
                 this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]),
             );
 
@@ -993,7 +993,7 @@ export class Communication {
     private async handleCall(message: CallMessage): Promise<void> {
         try {
             const args = deserializeApiCallArguments(message.data.args);
-            const data = await runWithCaller(this.isServer, message.callerIdentity, () =>
+            const data = await runWithCaller(message.callerIdentity, () =>
                 this.apiCall(message.origin, message.data.api, message.data.method, args),
             );
 

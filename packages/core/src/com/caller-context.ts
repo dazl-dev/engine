@@ -1,34 +1,20 @@
-interface CallerContext {
-    getStore<T = unknown>(): T | undefined;
-    run<R>(identity: unknown, callback: () => R): R;
-}
-let callerStore: CallerContext | undefined | null;
-
-async function initCallerContext() {
-    if (callerStore !== undefined) {
-        return callerStore !== null;
-    }
-    try {
-        const moduleName = 'node:async_hooks';
-        const { AsyncLocalStorage } = await import(moduleName);
-        callerStore = new AsyncLocalStorage();
-        return true;
-    } catch {
-        callerStore = null;
-        return false;
-    }
+export interface CallerContext {
+    getStore(): unknown;
+    run<R>(store: unknown, callback: () => R): R;
 }
 
-export function getCurrentCaller<T = unknown>(): T | undefined {
-    return callerStore?.getStore<T>();
+let activeCallerContext: CallerContext | undefined;
+export function setActiveCallerContext(ctx: CallerContext | undefined): void {
+    activeCallerContext = ctx;
 }
 
-export async function runWithCaller<R>(isNode: boolean, identity: unknown, fn: () => R): Promise<R> {
-    if (isNode) {
-        await initCallerContext();
-    }
-    if (callerStore) {
-        return callerStore.run(identity, fn);
+export function getCurrentCaller(): unknown {
+    return activeCallerContext?.getStore();
+}
+
+export function runWithCaller<R>(identity: unknown, fn: () => R): R {
+    if (identity !== undefined && activeCallerContext) {
+        return activeCallerContext.run(identity, fn);
     }
     return fn();
 }
