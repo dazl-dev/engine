@@ -11,3 +11,4 @@ export * from './hosts/ws-client-host.js';
 export * from './initializers/index.js';
 export * from './hosts/index.js';
 export * from './communication-errors.js';
+export * from './caller-context.js';

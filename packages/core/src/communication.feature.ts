@@ -1,5 +1,6 @@
 import { BaseHost } from './com/hosts/base-host.js';
 import { Communication, type ConfigEnvironmentRecord, type CommunicationOptions } from './com/communication.js';
+import { setActiveCallerContext, type CallerContext } from './com/caller-context.js';
 import { LoggerService } from './com/logger-service.js';
 import type { Target } from './com/types.js';
 import { Config } from './entities/config.js';
@@ -22,6 +23,7 @@ export interface IComConfig {
     connectedEnvironments?: {
         [environmentId: string]: ConfigEnvironmentRecord;
     };
+    callerContext?: CallerContext;
 }
 export default class COM extends Feature<'COM'> {
     id = 'COM' as const;
@@ -70,6 +72,7 @@ COM.setup(
             resolvedContexts,
             publicPath,
             connectedEnvironments = {},
+            callerContext,
         },
         loggerTransports,
         [RUN_OPTIONS]: runOptions,
@@ -102,6 +105,7 @@ COM.setup(
             isNode,
             comOptions,
         );
+        setActiveCallerContext(callerContext);
         // manually register window initialization api service to be used during
         // start of managed iframe in packages/core/src/com/initializers/iframe.ts
         communication.registerAPI({ id: WindowInitializerService.apiId }, new WindowInitializerService());
@@ -110,7 +114,10 @@ COM.setup(
             { environment: communication.getEnvironmentId() },
             { severity: loggerSeverity, maxLogMessages, logToConsole },
         );
-        onDispose(() => communication.dispose());
+        onDispose(() => {
+            setActiveCallerContext(undefined);
+            return communication.dispose();
+        });
         return {
             loggerService,
             communication,
