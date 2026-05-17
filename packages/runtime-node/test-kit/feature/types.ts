@@ -3,3 +3,7 @@ export type EchoService = {
     echoChained: () => Promise<string>;
     getActivateValue: () => unknown;
 };
+
+export type IdentityService = {
+    whoAmI: () => unknown;
+};
