@@ -1,5 +1,5 @@
 import type io from 'socket.io';
-import { BaseHost, LogLevel, logToConsole, type Message } from '@dazl/engine-core';
+import { BaseHost, CallerIdentity, LogLevel, logToConsole, type Message } from '@dazl/engine-core';
 import { SafeDisposable, type IDisposable } from '@dazl/patterns';
 
 export interface IConnectionEvent {
@@ -26,6 +26,11 @@ export class WsHost extends BaseHost {
     }
 }
 
+/**
+ * Extracts caller identity from Socket.IO handshake.
+ */
+export type IdentityExtractor = (handshake: io.Socket['handshake'], clientId: string) => CallerIdentity | undefined;
+
 export class WsServerHost extends BaseHost implements IDisposable {
     private connectionHandlers = new Set<IConnectionHandler>();
     private disconnectionHandlers = new Set<IConnectionHandler>();
@@ -33,10 +38,15 @@ export class WsServerHost extends BaseHost implements IDisposable {
     private socketToEnvId = new Map<string, { socket: io.Socket; clientID: string }>();
     private clientIdToSocket = new Map<string, io.Socket>();
     private disposables = new SafeDisposable(WsServerHost.name);
+    private identityStore = new Map<string, CallerIdentity>();
+    private identityExtractor?: IdentityExtractor;
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
 
-    constructor(private server: io.Server | io.Namespace) {
+    constructor(
+        private server: io.Server | io.Namespace,
+        identityExtractor?: IdentityExtractor,
+    ) {
         super();
         this.server.on('connection', this.onConnection);
         this.disposables.add('connection', () => this.server.off('connection', this.onConnection));
@@ -44,6 +54,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
         this.disposables.add('clear connection handlers', () => this.connectionHandlers.clear());
         this.disposables.add('clear disconnection handlers', () => this.disconnectionHandlers.clear());
         this.disposables.add('clear reconnection handlers', () => this.reconnectionHandlers.clear());
+        this.identityExtractor = identityExtractor;
     }
 
     public registerConnectionHandler(handler: IConnectionHandler) {
@@ -99,6 +110,16 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
         this.clientIdToSocket.set(clientId, socket);
 
+        const extractor = this.identityExtractor;
+        if (extractor) {
+            this.callWithErrorHandling(() => {
+                const identity = extractor(socket.handshake, clientId);
+                if (identity) {
+                    this.identityStore.set(clientId, identity);
+                }
+            });
+        }
+
         const connectionEvent: IConnectionEvent = {
             clientId,
             socket,
@@ -128,6 +149,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
             // modify message to be able to forward it
             message.from = fromId;
             message.origin = originId;
+            message.callerIdentity = this.identityStore.get(clientId);
 
             this.emitMessageHandlers(message);
         };
@@ -148,6 +170,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 }
             }
             if (this.clientIdToSocket.get(clientId) === socket) {
+                this.identityStore.delete(clientId);
                 this.clientIdToSocket.delete(clientId);
                 for (const handler of this.disconnectionHandlers) {
                     this.callWithErrorHandling(() => handler(connectionEvent));

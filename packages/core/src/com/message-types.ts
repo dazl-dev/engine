@@ -5,6 +5,8 @@ export interface RemoteCallAddress {
     method: string;
 }
 
+export type CallerIdentity = Record<string, string>;
+
 export interface BaseMessage {
     type: string;
     to: string;
@@ -13,6 +15,7 @@ export interface BaseMessage {
     error?: Error;
     origin: string;
     forwardingChain?: string[];
+    callerIdentity?: CallerIdentity;
 }
 
 export interface CallMessage extends BaseMessage {

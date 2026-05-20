@@ -13,6 +13,8 @@ import {
     Slot,
     declareComEmitter,
     multiTenantMethod,
+    type CallerIdentity,
+    type Message,
 } from '@dazl/engine-core';
 import * as chai from 'chai';
 import { expect } from 'chai';
@@ -1149,6 +1151,102 @@ describe('environment-dependencies communication', () => {
 
         const env1EngineEnv2 = new RuntimeEngine(env2);
         await env1EngineEnv2.run([f]);
+    });
+});
+
+describe('CallerIdentity', () => {
+    function setupCrossEnvCommunication(callerIdentityOptions?: {
+        getCallerIdentity: () => CallerIdentity | undefined;
+    }) {
+        const hostMain = new BaseHost();
+        const hostChild = hostMain.open();
+        const comMain = new Communication(hostMain, 'main', {}, {}, false, callerIdentityOptions);
+        const comChild = new Communication(hostChild, 'child');
+        comMain.registerEnv('child', hostChild);
+        comChild.registerEnv('main', hostMain);
+        return { comMain, comChild, hostMain, hostChild };
+    }
+
+    function collectCallMessages(host: BaseHost): Message[] {
+        const collected: Message[] = [];
+        host.addEventListener('message', ({ data }) => {
+            if (data.type === 'call') {
+                collected.push(data);
+            }
+        });
+        return collected;
+    }
+
+    it('attaches getCallerIdentity result to outbound call messages', async () => {
+        const identity: CallerIdentity = { userId: 'test-user', role: 'admin' };
+        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
+        const callMessages = collectCallMessages(hostChild);
+
+        comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+        const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+        await proxy.greet();
+
+        expect(callMessages).to.have.length(1);
+        expect(callMessages[0]!.callerIdentity).to.eql(identity);
+    });
+
+    it('uses undefined as default callerIdentity when getCallerIdentity is not provided', async () => {
+        const { comMain, comChild, hostChild } = setupCrossEnvCommunication();
+        const callMessages = collectCallMessages(hostChild);
+
+        comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+        const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+        await proxy.greet();
+
+        expect(callMessages).to.have.length(1);
+        expect(callMessages[0]!.callerIdentity).to.eql(undefined);
+    });
+
+    it('sets callerIdentity to undefined when getCallerIdentity returns undefined', async () => {
+        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => undefined });
+        const callMessages = collectCallMessages(hostChild);
+
+        comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+        const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+        await proxy.greet();
+
+        expect(callMessages).to.have.length(1);
+        expect(callMessages[0]!.callerIdentity).to.eq(undefined);
+    });
+
+    it('preserves callerIdentity when a message is forwarded through an intermediate environment', async () => {
+        const identity: CallerIdentity = { userId: 'forwarded-user' };
+
+        const host1 = new BaseHost();
+        const host2 = new BaseHost();
+        const host3 = new BaseHost();
+
+        const com1 = new Communication(host1, 'com1', {}, {}, false, { getCallerIdentity: () => identity });
+        const com2 = new Communication(host2, 'com2');
+        const com3 = new Communication(host3, 'com3');
+
+        // com1 <-> com2
+        const com2InHost1 = host1.open();
+        com1.registerEnv('com2', com2InHost1);
+        com2.registerMessageHandler(com2InHost1);
+
+        // com2 <-> com3
+        const com3InHost2 = host2.open();
+        com2.registerEnv('com3', com3InHost2);
+        com3.registerMessageHandler(com3InHost2);
+
+        // com1 routes com3-bound messages through com2, which forwards them to com3
+        com1.registerEnv('com3', com2InHost1);
+
+        // spy on messages as they arrive at com3 after being forwarded by com2
+        const forwardedCallMessages = collectCallMessages(com3InHost2);
+
+        com3.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+        const proxy = com1.apiProxy<{ greet: () => string }>({ id: 'com3' }, { id: 'testApi' });
+        await proxy.greet();
+
+        expect(forwardedCallMessages).to.have.length(1);
+        expect(forwardedCallMessages[0]!.callerIdentity).to.eql(identity);
     });
 });
 

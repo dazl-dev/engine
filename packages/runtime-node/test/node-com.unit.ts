@@ -4,10 +4,11 @@ import {
     Environment,
     WsClientHost,
     socketClientInitializer,
+    type CallerIdentity,
     type DisposeMessage,
     type Message,
 } from '@dazl/engine-core';
-import { WsServerHost } from '@dazl/engine-runtime-node';
+import { IdentityExtractor, WsServerHost } from '@dazl/engine-runtime-node';
 import { createWaitForCall } from '@dazl/wait-for-call';
 import { expect } from 'chai';
 import { safeListeningHttpServer } from 'create-listening-server';
@@ -27,6 +28,7 @@ describe('Socket communication', () => {
     let socketServer: io.Server | undefined;
     let serverTopology: Record<string, string> = {};
     let port: number;
+    let nameSpace: io.Namespace;
 
     const disposables = createDisposables();
     const disposeAfterTest = <T extends { dispose: () => void }>(obj: T) => {
@@ -39,7 +41,7 @@ describe('Socket communication', () => {
         const { httpServer: server, port: servingPort } = await safeListeningHttpServer(3050);
         port = servingPort;
         socketServer = new io.Server(server, { cors: {} });
-        const nameSpace = socketServer.of('processing');
+        nameSpace = socketServer.of('processing');
         serverTopology['server-host'] = `http://localhost:${port}/processing`;
         const connections = new Set<Socket>();
         disposables.add(async () => {
@@ -317,5 +319,129 @@ describe('Socket communication', () => {
         await waitFor(() => expect(firstClient.isConnected(), 'first disconnected').to.eql(false), { timeout: 2_000 });
         expect(disconnectSpy.callCount, 'first disconnected count').to.eq(1);
         expect(secondClient.isConnected(), 'second connected').to.eql(true);
+    });
+
+    describe('identity extraction', () => {
+        beforeEach(() => {
+            void serverHost.dispose();
+        });
+
+        async function connectClient(
+            identityExtractor?: IdentityExtractor,
+            clientOptions?: ConstructorParameters<typeof WsClientHost>[1],
+        ) {
+            const serverHost = disposeAfterTest(new WsServerHost(nameSpace, identityExtractor));
+            const clientHost = disposeAfterTest(new WsClientHost(serverTopology['server-host']!, clientOptions));
+            await clientHost.connected;
+            return { serverHost, clientHost };
+        }
+
+        function collectMessages(host: WsServerHost): Message[] {
+            const received: Message[] = [];
+            host.addEventListener('message', ({ data }: { data: Message }) => {
+                received.push(data);
+            });
+            return received;
+        }
+
+        async function makeCall(serverHost: WsServerHost, clientHost: WsClientHost) {
+            const serverCom = new Communication(serverHost, 'server-host');
+            const clientCom = new Communication(clientHost, 'client-host', serverTopology);
+            serverCom.registerAPI<ICommunicationTestApi>(
+                { id: 'test' },
+                { sayHello: () => 'hi', sayHelloWithDataAndParams: (n) => n },
+            );
+            const methods = clientCom.apiProxy<ICommunicationTestApi>({ id: 'server-host' }, { id: 'test' });
+            await methods.sayHello();
+        }
+
+        it('attaches extracted identity to incoming messages', async () => {
+            const stableClientId = 'my-client-id';
+            const identity: CallerIdentity = { userId: 'alice', role: 'admin' };
+            const extractor = sinon.spy((_handshake: io.Socket['handshake'], _clientId: string) => identity);
+            const { serverHost, clientHost } = await connectClient(extractor, { auth: { clientId: stableClientId } });
+            const received = collectMessages(serverHost);
+
+            await makeCall(serverHost, clientHost);
+
+            const callMsg = received.find((m) => m.type === 'call');
+            expect(callMsg?.callerIdentity).to.eql(identity);
+            expect(extractor.firstCall.args[0]).to.have.property('auth');
+            expect(extractor.firstCall.args[1]).to.eq(stableClientId);
+        });
+
+        it('does not attach callerIdentity when no identityExtractor is provided', async () => {
+            const { serverHost, clientHost } = await connectClient();
+            const received = collectMessages(serverHost);
+
+            await makeCall(serverHost, clientHost);
+
+            const callMsg = received.find((m) => m.type === 'call');
+            expect(callMsg?.callerIdentity).to.eq(undefined);
+        });
+
+        it('connection succeeds and messages flow even when identityExtractor throws', async () => {
+            const throwingExtractor: IdentityExtractor = () => {
+                throw new Error('test error');
+            };
+            const consoleErrorStub = sinon.stub(console, 'error');
+            try {
+                const { serverHost, clientHost } = await connectClient(throwingExtractor);
+                const received = collectMessages(serverHost);
+
+                await makeCall(serverHost, clientHost);
+
+                const callMsg = received.find((m) => m.type === 'call');
+                expect(callMsg).to.not.eq(undefined);
+                expect(callMsg?.callerIdentity).to.eq(undefined);
+            } finally {
+                consoleErrorStub.restore();
+            }
+        });
+
+        it('uses updated identity when client reconnects with the same clientId', async () => {
+            const stableClientId = 'stable-client';
+            let currentIdentity: CallerIdentity = { role: 'admin' };
+            const extractor: IdentityExtractor = () => ({ ...currentIdentity });
+
+            const serverHost = disposeAfterTest(new WsServerHost(nameSpace, extractor));
+            const serverCom = new Communication(serverHost, 'server-host');
+            serverCom.registerAPI<ICommunicationTestApi>(
+                { id: 'test' },
+                { sayHello: () => 'hi', sayHelloWithDataAndParams: (n) => n },
+            );
+
+            // First client connects and makes a call
+            const received: Message[] = [];
+            serverHost.addEventListener('message', ({ data }: { data: Message }) => received.push(data));
+
+            const clientHost1 = disposeAfterTest(
+                new WsClientHost(serverTopology['server-host']!, { auth: { clientId: stableClientId } }),
+            );
+            await clientHost1.connected;
+            const clientCom1 = new Communication(clientHost1, 'client-host', serverTopology);
+            const methods1 = clientCom1.apiProxy<ICommunicationTestApi>({ id: 'server-host' }, { id: 'test' });
+            await methods1.sayHello();
+
+            const firstCallMsg = received.find((m) => m.type === 'call');
+            expect(firstCallMsg?.callerIdentity).to.eql({ role: 'admin' });
+
+            // Reconnect with same clientId but updated identity
+            currentIdentity = { role: 'guest' };
+            received.length = 0;
+
+            const clientHost2 = disposeAfterTest(
+                new WsClientHost(serverTopology['server-host']!, { auth: { clientId: stableClientId } }),
+            );
+            await clientHost2.connected;
+            await waitFor(() => expect(clientHost1.isConnected()).to.eq(false), { timeout: 2_000 });
+
+            const clientCom2 = new Communication(clientHost2, 'client-host2', serverTopology);
+            const methods2 = clientCom2.apiProxy<ICommunicationTestApi>({ id: 'server-host' }, { id: 'test' });
+            await methods2.sayHello();
+
+            const secondCallMsg = received.find((m) => m.type === 'call');
+            expect(secondCallMsg?.callerIdentity).to.eql({ role: 'guest' });
+        });
     });
 });
