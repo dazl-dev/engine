@@ -13,6 +13,7 @@ export interface BaseMessage {
     error?: Error;
     origin: string;
     forwardingChain?: string[];
+    callerIdentity?: unknown;
 }
 
 export interface CallMessage extends BaseMessage {
