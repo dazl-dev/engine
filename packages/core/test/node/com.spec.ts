@@ -1248,6 +1248,58 @@ describe('CallerIdentity', () => {
         expect(forwardedCallMessages).to.have.length(1);
         expect(forwardedCallMessages[0]!.callerIdentity).to.eql(identity);
     });
+
+    it('attaches getCallerIdentity result to outbound listen messages', async () => {
+        const identity: CallerIdentity = { userId: 'subscriber', role: 'viewer' };
+        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
+
+        const listenMessages: Message[] = [];
+        hostChild.addEventListener('message', ({ data }) => {
+            if (data.type === 'listen') {
+                listenMessages.push(data);
+            }
+        });
+
+        const mockApi = getMockApi();
+        comChild.registerAPI({ id: 'testApi' }, mockApi);
+        const proxy = comMain.apiProxy<typeof mockApi>(
+            { id: 'child' },
+            { id: 'testApi' },
+            { listen: { listener: true, emitOnly: true } },
+        );
+
+        await proxy.listen(spy());
+
+        expect(listenMessages).to.have.length(1);
+        expect(listenMessages[0]!.callerIdentity).to.eql(identity);
+    });
+
+    it('attaches getCallerIdentity result to outbound unlisten messages', async () => {
+        const identity: CallerIdentity = { userId: 'subscriber', role: 'viewer' };
+        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
+
+        const unlistenMessages: Message[] = [];
+        hostChild.addEventListener('message', ({ data }) => {
+            if (data.type === 'unlisten') {
+                unlistenMessages.push(data);
+            }
+        });
+
+        const mockApi = getMockApi();
+        comChild.registerAPI({ id: 'testApi' }, mockApi);
+        const proxy = comMain.apiProxy<typeof mockApi>(
+            { id: 'child' },
+            { id: 'testApi' },
+            { listen: { listener: true, emitOnly: true }, unsubscribe: { emitOnly: true, removeListener: 'listen' } },
+        );
+
+        const handler = spy();
+        await proxy.listen(handler);
+        await proxy.unsubscribe(handler);
+
+        expect(unlistenMessages).to.have.length(1);
+        expect(unlistenMessages[0]!.callerIdentity).to.eql(identity);
+    });
 });
 
 function getMockApi() {

@@ -776,6 +776,7 @@ export class Communication {
                     },
                     handlerId: listenerHandlerId,
                     origin,
+                    callerIdentity: this.options.getCallerIdentity(),
                 };
                 // sometimes the callback will never happen since target environment is already dead
                 this.sendTo(envId, message);
@@ -807,6 +808,7 @@ export class Communication {
                         handlerId: '',
                         callbackId,
                         origin,
+                        callerIdentity: this.options.getCallerIdentity(),
                     };
                     message.handlerId = this.createHandlerRecord(envId, api, method, fn, message);
 
