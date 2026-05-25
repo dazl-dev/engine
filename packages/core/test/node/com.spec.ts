@@ -1095,9 +1095,9 @@ describe('Communication', () => {
     function setupCrossEnvCommunication(
         mainOptions?: {
             getCallerIdentity?: () => CallerIdentity | undefined;
-            apiCallWrapper?: (message: Message, apiCall: () => unknown) => unknown;
+            apiCallWrapper?: <T>(message: Message, apiCall: () => T) => T;
         },
-        childOptions?: { apiCallWrapper?: (message: Message, apiCall: () => unknown) => unknown },
+        childOptions?: { apiCallWrapper?: <T>(message: Message, apiCall: () => T) => T },
     ) {
         const hostMain = new BaseHost();
         const hostChild = hostMain.open();

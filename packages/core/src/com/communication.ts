@@ -74,7 +74,7 @@ export interface CommunicationOptions {
     connectedEnvironments?: { [environmentId: string]: ConfigEnvironmentRecord };
     apis?: RemoteAPIServicesMapping;
     getCallerIdentity?: () => CallerIdentity | undefined;
-    apiCallWrapper?: (message: Message, apiCall: () => unknown) => unknown;
+    apiCallWrapper?: <T>(message: Message, apiCall: () => T) => T;
 }
 
 /**

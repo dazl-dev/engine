@@ -25,7 +25,7 @@ export interface IComConfig {
         [environmentId: string]: ConfigEnvironmentRecord;
     };
     getCallerIdentity?: () => CallerIdentity | undefined;
-    apiCallWrapper?: (message: Message, apiCall: () => unknown) => unknown;
+    apiCallWrapper?: <T>(message: Message, apiCall: () => T) => T;
 }
 export default class COM extends Feature<'COM'> {
     id = 'COM' as const;
