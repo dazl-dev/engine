@@ -446,642 +446,915 @@ describe('Communication', () => {
         });
     });
 
-    it('multi communication', async () => {
-        const host = new BaseHost();
-        const main = new Communication(host, 'main');
+    describe('multi-communication', () => {
+        it('multi communication', async () => {
+            const host = new BaseHost();
+            const main = new Communication(host, 'main');
 
-        const host2 = host.open();
-        const main2 = new Communication(host2, 'main2');
+            const host2 = host.open();
+            const main2 = new Communication(host2, 'main2');
 
-        main.registerEnv('main2', host2);
+            main.registerEnv('main2', host2);
 
-        main2.registerAPI(
-            { id: 'echoService' },
-            {
+            main2.registerAPI(
+                { id: 'echoService' },
+                {
+                    echo(s: string) {
+                        return s;
+                    },
+                },
+            );
+
+            const proxy = main.apiProxy<EchoService>(Promise.resolve({ id: 'main2' }), { id: 'echoService' });
+
+            const res = await proxy.echo('Yoo!');
+
+            expect(res).to.be.equal('Yoo!');
+        });
+
+        it('multitenant multi communication', async () => {
+            // creating 3 environments - main as a parent, and 2 child environments
+            const host = new BaseHost();
+            const main = new Communication(host, 'main');
+
+            const host2 = host.open();
+            const child = new Communication(host2, 'child');
+
+            const host3 = host.open();
+            const child2 = new Communication(host3, 'child2');
+
+            // registering them to main
+            main.registerEnv('child', host2);
+            main.registerEnv('child2', host3);
+
+            // a class with a multitenant function
+            class MultiEcho {
+                [SERVICE_CONFIG] = {
+                    echo: multiTenantMethod(this.echo),
+                };
+                echo(id: string, s: string) {
+                    return `${id} echo ${s}`;
+                }
+            }
+
+            // registering the MultiEcho service on child2 com
+            child2.registerAPI({ id: 'echoService' }, new MultiEcho());
+
+            // creating a proxy between main and child2 and registering it
+            const child2Proxy = main.apiProxy<MultiEcho>(Promise.resolve({ id: 'child2' }), { id: 'echoService' });
+            child.registerAPI({ id: 'echoService' }, child2Proxy);
+
+            // creating the proxy between child and child2 using the proxy between main and child2
+            const childProxy = child.apiProxy<MultiEcho>(Promise.resolve({ id: 'child2' }), { id: 'echoService' });
+
+            const res = await childProxy.echo('Yoo!');
+
+            expect(res).to.be.equal('child echo Yoo!');
+        });
+
+        it(`doesn't send callback message on a method that was defined not to send one`, async () => {
+            const host = new BaseHost();
+            const main = new Communication(host, 'main', undefined, undefined, undefined, {
+                warnOnSlow: true,
+            });
+
+            const host2 = host.open();
+            const child = new Communication(host2, 'child', undefined, undefined, undefined, {
+                warnOnSlow: true,
+            });
+
+            // handleMessage is called when message is received from remote
+            const handleMessageStub = stub(main, 'handleMessage');
+
+            // callMethod is being called when sending call/listen request to other origin
+            const childCallMethodStub = stub(child, 'callMethod');
+
+            main.registerEnv('child', host2);
+
+            child.registerAPI({ id: 'echoService' }, new EchoService());
+            const proxy = main.apiProxy<EchoService>(
+                Promise.resolve({ id: 'child' }),
+                { id: 'echoService' },
+                {
+                    echo: {
+                        emitOnly: true,
+                    },
+                },
+            );
+            await proxy.echo('Yo!');
+
+            // we want to check a callback message was not send
+            expect(childCallMethodStub).to.have.not.been.called;
+
+            // we need to check that no message was received
+            expect(handleMessageStub).to.have.not.been.called;
+        });
+
+        it('communication handshake', async () => {
+            const testText = 'Yoo!';
+            const echoService: {
+                echo(s: string): string;
+            } = {
                 echo(s: string) {
                     return s;
                 },
-            },
-        );
-
-        const proxy = main.apiProxy<EchoService>(Promise.resolve({ id: 'main2' }), { id: 'echoService' });
-
-        const res = await proxy.echo('Yoo!');
-
-        expect(res).to.be.equal('Yoo!');
-    });
-
-    it('multitenant multi communication', async () => {
-        // creating 3 environments - main as a parent, and 2 child environments
-        const host = new BaseHost();
-        const main = new Communication(host, 'main');
-
-        const host2 = host.open();
-        const child = new Communication(host2, 'child');
-
-        const host3 = host.open();
-        const child2 = new Communication(host3, 'child2');
-
-        // registering them to main
-        main.registerEnv('child', host2);
-        main.registerEnv('child2', host3);
-
-        // a class with a multitenant function
-        class MultiEcho {
-            [SERVICE_CONFIG] = {
-                echo: multiTenantMethod(this.echo),
             };
-            echo(id: string, s: string) {
-                return `${id} echo ${s}`;
+            const echoServiceComID = { id: 'echoService' };
+
+            const client1RootHost = new BaseHost();
+            const client2RootHost = new BaseHost();
+            const serverRootHost = new BaseHost();
+
+            const client1 = new Communication(client1RootHost, 'client1');
+            const client2 = new Communication(client2RootHost, 'client2');
+            const serverEnv = new Communication(serverRootHost, 'server');
+
+            // server env setup
+            const client1RemoteHost = client1RootHost.open();
+            serverEnv.registerMessageHandler(client1RemoteHost);
+            client1.registerEnv('server', client1RemoteHost);
+
+            const client2RemoteHost = client2RootHost.open();
+            serverEnv.registerMessageHandler(client2RemoteHost);
+            client2.registerEnv('server', client2RemoteHost);
+
+            serverEnv.registerAPI(echoServiceComID, echoService);
+
+            const echoServiceProxyInClient1 = client1.apiProxy<EchoService>(
+                Promise.resolve({ id: 'server' }),
+                echoServiceComID,
+            );
+            const echoServiceInstanceInClient2 = client2.apiProxy<EchoService>(
+                Promise.resolve({ id: 'server' }),
+                echoServiceComID,
+            );
+
+            const responseToClient1 = await echoServiceProxyInClient1.echo(testText);
+            const responseToClient2 = await echoServiceInstanceInClient2.echo(testText);
+
+            expect(responseToClient1, 'allow communication between calling environment and base').to.be.equal(testText);
+            expect(responseToClient2, 'allow communication between calling environment and base').to.be.equal(testText);
+
+            client1.registerAPI(echoServiceComID, echoService);
+            const echoServiceProxyFromServerToClient1 = serverEnv.apiProxy<EchoService>(
+                { id: 'client1' },
+                echoServiceComID,
+            );
+
+            expect(
+                await echoServiceProxyFromServerToClient1.echo(testText),
+                'after handshake is done - allow sending message from base to client1',
+            ).to.eq(testText);
+
+            client2.registerAPI(echoServiceComID, echoService);
+            const echoServiceProxyFromServerToClient2 = serverEnv.apiProxy<EchoService>(
+                { id: 'client2' },
+                echoServiceComID,
+            );
+
+            expect(
+                await echoServiceProxyFromServerToClient2.echo(testText),
+                'after handshake is done - allow sending message from base to client2',
+            ).to.eq(testText);
+        });
+
+        it('communication local clear remove listeners form registered services', async () => {
+            const echoService = {
+                handlers: new Set<(s: string) => void>(),
+                emit(s: string) {
+                    for (const handler of this.handlers) {
+                        handler(s);
+                    }
+                },
+                sub(fn: (s: string) => void) {
+                    this.handlers.add(fn);
+                },
+                unsub(fn: (s: string) => void) {
+                    this.handlers.delete(fn);
+                },
+            };
+            const echoServiceComID = { id: 'echoService' };
+
+            const client1RootHost = new BaseHost();
+            const serverRootHost = new BaseHost();
+
+            const client1 = new Communication(client1RootHost, 'client1');
+            const serverEnv = new Communication(serverRootHost, 'server');
+
+            // server env setup
+            const client1RemoteHost = client1RootHost.open();
+            serverEnv.registerMessageHandler(client1RemoteHost);
+            client1.registerEnv('server', client1RemoteHost);
+
+            serverEnv.registerAPI(echoServiceComID, echoService);
+
+            const proxy = client1.apiProxy<typeof echoService>(Promise.resolve({ id: 'server' }), echoServiceComID, {
+                ...declareComEmitter('sub', 'unsub'),
+            });
+            const logs: string[] = [];
+            await proxy.sub((e) => {
+                logs.push(`event:${e}`);
+            });
+            echoService.emit('1');
+            expect(logs).to.eql(['event:1']);
+
+            serverEnv.clearEnvironment('client1');
+
+            echoService.emit('2');
+            expect(logs).to.eql(['event:1']);
+            expect(echoService.handlers.size, 'handler was removed').to.eq(0);
+        });
+    });
+
+    describe('forwarding', () => {
+        it('forwards to pending envs wait until resolve', async () => {
+            const middlemanHost = new BaseHost();
+            const aHost = new BaseHost();
+            const bHost = new BaseHost();
+
+            const mainCom = new Communication(middlemanHost, 'middle');
+            const bCom = new Communication(bHost, 'bEnv');
+            const aCom = new Communication(aHost, 'aEnv');
+
+            disposables.add(mainCom);
+            disposables.add(bCom);
+            disposables.add(aCom);
+
+            aCom.registerEnv('bEnv', middlemanHost); // bEnv is registered with middlemanHost
+
+            mainCom.registerEnv('aEnv', aHost);
+            mainCom.registerEnv('bEnv', bHost);
+
+            // bEnv is not ready to receive messages yet
+            void mainCom.envReady('bEnv');
+
+            bCom.registerEnv('aEnv', middlemanHost); // aEnv is registered with middlemanHost
+
+            const api = {
+                spy: spy(),
+            };
+            bCom.registerAPI({ id: 'myApi' }, api);
+
+            const mockApiProxyFromAEnv = aCom.apiProxy<typeof api>({ id: 'bEnv' }, { id: 'myApi' });
+            const done = mockApiProxyFromAEnv.spy();
+            // calling the remote api takes several micro ticks, so we wait one tick.
+            await sleep(0);
+            expect(api.spy).to.have.callCount(0);
+            mainCom.handleReady({ from: 'bEnv' });
+            await sleep(0);
+            expect(api.spy).to.have.callCount(1);
+            await done;
+        });
+
+        it('forwards listen calls', async () => {
+            const middlemanHost = new BaseHost();
+            const aHost = new BaseHost();
+            const bHost = new BaseHost();
+
+            const mainCom = new Communication(middlemanHost, 'middle');
+            const bCom = new Communication(bHost, 'bEnv');
+            const aCom = new Communication(aHost, 'aEnv');
+
+            disposables.add(mainCom);
+            disposables.add(bCom);
+            disposables.add(aCom);
+
+            aCom.registerEnv('bEnv', middlemanHost);
+            aCom.registerEnv('middle', middlemanHost);
+
+            mainCom.registerEnv('aEnv', aHost);
+            mainCom.registerEnv('bEnv', bHost);
+
+            bCom.registerEnv('middle', middlemanHost);
+            bCom.registerEnv('aEnv', middlemanHost);
+
+            const mockApi = getMockApi();
+            bCom.registerAPI({ id: 'myApi' }, mockApi);
+
+            const mockApiProxyFromAEnv = aCom.apiProxy<typeof mockApi>(
+                { id: 'bEnv' },
+                { id: 'myApi' },
+                {
+                    listen: {
+                        listener: true,
+                    },
+                },
+            );
+
+            const spyFn = spy();
+
+            await mockApiProxyFromAEnv.listen(spyFn);
+
+            const spyFn2 = spy();
+            await mockApiProxyFromAEnv.listen(spyFn2);
+            mockApi.invoke();
+
+            expect(spyFn).to.have.callCount(1);
+            expect(spyFn2).to.have.callCount(1);
+            expect(spyFn.calledWith(1)).to.eq(true);
+        });
+
+        it('forwards listen calls only if listener was configured', async () => {
+            const middlemanHost = new BaseHost();
+            const aHost = new BaseHost();
+            const bHost = new BaseHost();
+
+            const mainCom = new Communication(middlemanHost, 'middle');
+            const bCom = new Communication(bHost, 'bEnv');
+            const aCom = new Communication(aHost, 'aEnv');
+
+            disposables.add(mainCom);
+            disposables.add(bCom);
+            disposables.add(aCom);
+
+            aCom.registerEnv('bEnv', middlemanHost);
+            aCom.registerEnv('middle', middlemanHost);
+
+            mainCom.registerEnv('aEnv', aHost);
+            mainCom.registerEnv('bEnv', bHost);
+
+            bCom.registerEnv('middle', middlemanHost);
+            bCom.registerEnv('aEnv', middlemanHost);
+
+            const mockApi = getMockApi();
+            bCom.registerAPI({ id: 'myApi' }, mockApi);
+            const mockApiProxyFromAEnv = aCom.apiProxy<typeof mockApi>({ id: 'bEnv' }, { id: 'myApi' });
+
+            const spyFn = spy();
+            await expect(mockApiProxyFromAEnv.listen(spyFn)).to.be.eventually.rejectedWith(
+                'Cannot add listener to un-configured method myApi listen',
+            );
+        });
+
+        it('forwards dispose calls', async () => {
+            const middlemanHost = new BaseHost();
+            const aHost = new BaseHost();
+            const bHost = new BaseHost();
+
+            const mainCom = new Communication(middlemanHost, 'middle');
+            const bCom = new Communication(bHost, 'bEnv');
+            const aCom = new Communication(aHost, 'aEnv');
+
+            disposables.add(mainCom);
+            disposables.add(bCom);
+            disposables.add(aCom);
+
+            aCom.registerEnv('bEnv', middlemanHost);
+            bCom.registerEnv('aEnv', middlemanHost);
+            mainCom.registerEnv('aEnv', aHost);
+            mainCom.registerEnv('bEnv', bHost);
+            aCom.handleReady({ from: 'bEnv' });
+            bCom.handleReady({ from: 'anv' });
+
+            const echoService = {
+                echo() {
+                    return 'echo';
+                },
+            };
+
+            bCom.registerAPI({ id: 'myApi' }, echoService);
+
+            const mockApiProxyFromAEnv = aCom.apiProxy<typeof echoService>({ id: 'bEnv' }, { id: 'myApi' });
+            const spyFn = spy();
+            bCom.subscribeToEnvironmentDispose(spyFn);
+            await mockApiProxyFromAEnv.echo();
+            aCom.clearEnvironment(aCom.getEnvironmentId());
+            await waitFor(() => {
+                expect(spyFn).to.have.been.calledWith(aCom.getEnvironmentId());
+            });
+        });
+
+        it('forwards unlisten calls', async () => {
+            const middlemanHost = new BaseHost();
+            const aHost = new BaseHost();
+            const bHost = new BaseHost();
+
+            const mainCom = new Communication(middlemanHost, 'middle');
+            const bCom = new Communication(bHost, 'bEnv');
+            const aCom = new Communication(aHost, 'aEnv');
+
+            disposables.add(mainCom);
+            disposables.add(bCom);
+            disposables.add(aCom);
+
+            aCom.registerEnv('bEnv', middlemanHost);
+            aCom.registerEnv('middle', middlemanHost);
+
+            mainCom.registerEnv('aEnv', aHost);
+            mainCom.registerEnv('bEnv', bHost);
+
+            bCom.registerEnv('middle', middlemanHost);
+            bCom.registerEnv('aEnv', middlemanHost);
+
+            const mockApi = getMockApi();
+            bCom.registerAPI({ id: 'myApi' }, mockApi);
+
+            const mockApiProxyFromAEnv = aCom.apiProxy<typeof mockApi>(
+                { id: 'bEnv' },
+                { id: 'myApi' },
+                {
+                    listen: {
+                        listener: true,
+                    },
+                    unsubscribe: {
+                        removeListener: 'listen',
+                    },
+                },
+            );
+
+            const spyFn = spy();
+            const spyFn2 = spy();
+            await mockApiProxyFromAEnv.listen(spyFn);
+            await mockApiProxyFromAEnv.listen(spyFn2);
+            await mockApiProxyFromAEnv.unsubscribe(spyFn);
+
+            mockApi.invoke();
+
+            expect(spyFn).to.have.callCount(0);
+            expect(spyFn2).to.have.callCount(1);
+            expect(mockApi.getListenersCount()).to.eq(1);
+            await mockApiProxyFromAEnv.unsubscribe(spyFn2);
+
+            mockApi.invoke();
+            expect(spyFn2).to.have.callCount(1);
+            expect(mockApi.getListenersCount()).to.eq(0);
+        });
+
+        it('supports answering forwarded message from a forwarded message', async () => {
+            /**
+             * The flow of the test is as follows:
+             * setup communication in a way where:
+             *   1 talks to 2
+             *   3 talks to 4
+             *   1 talks to 3
+             *
+             * and then initiate a message from 2 to 4, which will be forwarded twice - when it will arrive to 1 and then to 3, and will be forwarded back twice using same mechanism
+             */
+            const host1 = new BaseHost();
+            const host2 = new BaseHost();
+            const host3 = new BaseHost();
+            const host4 = new BaseHost();
+
+            const com1 = new Communication(host1, 'com1');
+            const com2 = new Communication(host2, 'com2');
+            const com3 = new Communication(host3, 'com3');
+            const com4 = new Communication(host4, 'com4');
+
+            disposables.add(com1);
+            disposables.add(com2);
+            disposables.add(com3);
+            disposables.add(com4);
+
+            // 1 to 2
+            const com2ChildHost = host1.open();
+            com1.registerEnv('com2', com2ChildHost);
+            com2.registerMessageHandler(com2ChildHost);
+
+            // 3 to 4
+            const com4ChildHost = host3.open();
+            com3.registerEnv('com4', com4ChildHost);
+            com4.registerMessageHandler(com4ChildHost);
+
+            // 1 to 3
+            const com3ChildHost = host1.open();
+            com1.registerEnv('com3', com3ChildHost);
+            com3.registerMessageHandler(com3ChildHost);
+
+            // instruct 1 to send messages to 4 using 3
+            com1.registerEnv('com4', com3ChildHost);
+
+            // instruct 2 to send messages to 4 using 1
+            const com1ChildHost = host1.open();
+            com1.registerMessageHandler(com1ChildHost);
+            com2.registerEnv('com4', com1ChildHost);
+
+            // create a service at 4
+            const echoService = {
+                echo: (text: string) => `hello ${text}`,
+                fail: (): Promise<string> => {
+                    return new Promise<string>(() => {
+                        throw new Error('fail');
+                    });
+                },
+            };
+            com4.registerAPI({ id: 'service' }, echoService);
+
+            // call it from 2
+            const apiProxy = com2.apiProxy<typeof echoService>({ id: 'com4' }, { id: 'service' });
+            expect(await apiProxy.echo('name')).to.eq('hello name');
+            await expect(apiProxy.fail()).to.be.rejectedWith('fail');
+        });
+
+        it('does not stuck in endless forwarding message', async () => {
+            /**
+             * The flow of the test is as follows:
+             * there are env 1 and env 2.
+             * env 2 is registered in com1 but with wrong host
+             *
+             * call some API from 1 to 2 and check if env 1 is not stuck in endless message forwarding
+             */
+            const host1 = new BaseHost();
+            const host2 = new BaseHost();
+
+            const com1 = new Communication(host1, 'com1');
+            const com2 = new Communication(host2, 'com2');
+
+            disposables.add(com1);
+            disposables.add(com2);
+
+            // 1 to 2 with wrong host
+            com1.registerEnv('com2', host1);
+
+            // create a service at 4
+            const echoService = {
+                test: () => 'hello',
+            };
+            com2.registerAPI({ id: 'service' }, echoService);
+
+            // call it from 1
+            const apiProxy = com1.apiProxy<typeof echoService>({ id: 'com2' }, { id: 'service' });
+
+            await expect(apiProxy.test()).to.be.rejected;
+        });
+    });
+
+    describe('re-connection', () => {
+        it('should report env re connection', () => {
+            const onEnvReconnect = spy();
+            const hostA = new BaseHost();
+            const hostB = new BaseHost();
+            const comA = new Communication(hostA, 'A');
+            const comB = new Communication(hostB, 'B'); // ready is ignored since nothing is connected
+            comA.registerEnv('B', hostB);
+            comA.registerMessageHandler(hostB);
+            comB.registerEnv('A', hostA);
+            comB.registerMessageHandler(hostA);
+
+            comA.subscribeToEnvironmentReconnect(onEnvReconnect);
+
+            new Communication(hostB, 'B'); // first ready
+
+            expect(onEnvReconnect).to.have.have.callCount(0);
+
+            new Communication(hostB, 'B'); // re-connect
+
+            expect(onEnvReconnect).to.have.have.callCount(1);
+        });
+        it('should auto connect event listeners when env is re-connected', async () => {
+            const onEventReconnect = spy();
+            const onEventEmitterCall = spy();
+            const hostA = new BaseHost('A-host');
+            const hostB = hostA.open('B-host');
+            const comA = new Communication(hostA, 'A');
+            const comB_api1 = { service: getMockApi() };
+            const comB = new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api1 });
+            comA.registerEnv('B', hostB);
+            comB.registerEnv('A', hostA);
+            comA.subscribeToEnvironmentReconnect(onEventReconnect);
+
+            // setup api between comA and comB
+            const apiProxy = comA.apiProxy<typeof comB_api1.service>(
+                { id: 'B' },
+                { id: 'service' },
+                { listen: { listener: true, emitOnly: true } },
+            );
+
+            await apiProxy.listen(onEventEmitterCall);
+
+            comB_api1.service.invoke();
+
+            await waitFor(() => {
+                expect(onEventEmitterCall, 'invoked event before reconnect').to.have.have.callCount(1);
+            });
+
+            // simulate unavailable communication
+            comB.removeMessageHandler(hostB);
+            // reconnect
+            const comB_api2 = { service: getMockApi() };
+            new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api2 });
+
+            await waitFor(() => {
+                expect(onEventReconnect, 'reconnected').to.been.calledWith('B');
+                expect(comB_api2.service.getListenersCount(), 'event handler re-register').to.eq(1);
+            });
+
+            comB_api2.service.invoke();
+
+            await waitFor(() => {
+                expect(onEventEmitterCall, 'invoked event after reconnect').to.have.have.callCount(2);
+            });
+        });
+        it('should auto connect event listeners when env is re-connected (replaced host)', async () => {
+            const onEventReconnect = spy();
+            const onEventEmitterCall = spy();
+            const hostA = new BaseHost('A-host');
+            const hostB = hostA.open('B-host');
+            const comA = new Communication(hostA, 'A');
+            const comB_api1 = { service: getMockApi() };
+            const comB = new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api1 });
+            comA.registerEnv('B', hostB);
+            comB.registerEnv('A', hostA);
+            comA.subscribeToEnvironmentReconnect(onEventReconnect);
+
+            // setup api between comA and comB
+            const apiProxy = comA.apiProxy<typeof comB_api1.service>(
+                { id: 'B' },
+                { id: 'service' },
+                { listen: { listener: true, emitOnly: true } },
+            );
+
+            await apiProxy.listen(onEventEmitterCall);
+
+            comB_api1.service.invoke();
+
+            await waitFor(() => {
+                expect(onEventEmitterCall, 'invoked event before reconnect').to.have.have.callCount(1);
+            });
+
+            // simulate unavailable communication
+            comB.removeMessageHandler(hostB);
+            // reconnect - simulate another window
+            const hostB_2 = new BaseHost('B-host-2'); //hostA.open('B-host-2');
+            comA.registerMessageHandler(hostB_2);
+            const comB_api2 = { service: getMockApi() };
+            new Communication(hostB_2, 'B', undefined, undefined, undefined, { apis: comB_api2 });
+
+            await waitFor(() => {
+                expect(onEventReconnect, 'reconnected').to.been.calledWith('B');
+                expect(comB_api2.service.getListenersCount(), 'event handler re-register').to.eq(1);
+            });
+
+            comB_api2.service.invoke();
+
+            await waitFor(() => {
+                expect(onEventEmitterCall, 'invoked event after reconnect').to.have.have.callCount(2);
+            });
+        });
+    });
+
+    function setupCrossEnvCommunication(
+        mainOptions?: {
+            getCallerIdentity?: () => CallerIdentity | undefined;
+            apiCallWrapper?: (message: Message, apiCall: () => unknown) => unknown;
+        },
+        childOptions?: { apiCallWrapper?: (message: Message, apiCall: () => unknown) => unknown },
+    ) {
+        const hostMain = new BaseHost();
+        const hostChild = hostMain.open();
+        const comMain = new Communication(hostMain, 'main', {}, {}, false, mainOptions);
+        const comChild = new Communication(hostChild, 'child', {}, {}, false, childOptions);
+        comMain.registerEnv('child', hostChild);
+        comChild.registerEnv('main', hostMain);
+        return { comMain, comChild, hostMain, hostChild };
+    }
+
+    function collectCallMessages(host: BaseHost): Message[] {
+        const collected: Message[] = [];
+        host.addEventListener('message', ({ data }) => {
+            if (data.type === 'call') {
+                collected.push(data);
             }
-        }
+        });
+        return collected;
+    }
 
-        // registering the MultiEcho service on child2 com
-        child2.registerAPI({ id: 'echoService' }, new MultiEcho());
+    describe('CallerIdentity', () => {
+        it('attaches getCallerIdentity result to outbound call messages', async () => {
+            const identity: CallerIdentity = { userId: 'test-user', role: 'admin' };
+            const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
+            const callMessages = collectCallMessages(hostChild);
 
-        // creating a proxy between main and child2 and registering it
-        const child2Proxy = main.apiProxy<MultiEcho>(Promise.resolve({ id: 'child2' }), { id: 'echoService' });
-        child.registerAPI({ id: 'echoService' }, child2Proxy);
+            comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+            const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+            await proxy.greet();
 
-        // creating the proxy between child and child2 using the proxy between main and child2
-        const childProxy = child.apiProxy<MultiEcho>(Promise.resolve({ id: 'child2' }), { id: 'echoService' });
-
-        const res = await childProxy.echo('Yoo!');
-
-        expect(res).to.be.equal('child echo Yoo!');
-    });
-
-    it(`doesn't send callback message on a method that was defined not to send one`, async () => {
-        const host = new BaseHost();
-        const main = new Communication(host, 'main', undefined, undefined, undefined, {
-            warnOnSlow: true,
+            expect(callMessages).to.have.length(1);
+            expect(callMessages[0]!.callerIdentity).to.eql(identity);
         });
 
-        const host2 = host.open();
-        const child = new Communication(host2, 'child', undefined, undefined, undefined, {
-            warnOnSlow: true,
+        it('uses undefined as default callerIdentity when getCallerIdentity is not provided', async () => {
+            const { comMain, comChild, hostChild } = setupCrossEnvCommunication();
+            const callMessages = collectCallMessages(hostChild);
+
+            comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+            const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+            await proxy.greet();
+
+            expect(callMessages).to.have.length(1);
+            expect(callMessages[0]!.callerIdentity).to.eql(undefined);
         });
 
-        // handleMessage is called when message is received from remote
-        const handleMessageStub = stub(main, 'handleMessage');
+        it('sets callerIdentity to undefined when getCallerIdentity returns undefined', async () => {
+            const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => undefined });
+            const callMessages = collectCallMessages(hostChild);
 
-        // callMethod is being called when sending call/listen request to other origin
-        const childCallMethodStub = stub(child, 'callMethod');
+            comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+            const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+            await proxy.greet();
 
-        main.registerEnv('child', host2);
-
-        child.registerAPI({ id: 'echoService' }, new EchoService());
-        const proxy = main.apiProxy<EchoService>(
-            Promise.resolve({ id: 'child' }),
-            { id: 'echoService' },
-            {
-                echo: {
-                    emitOnly: true,
-                },
-            },
-        );
-        await proxy.echo('Yo!');
-
-        // we want to check a callback message was not send
-        expect(childCallMethodStub).to.have.not.been.called;
-
-        // we need to check that no message was received
-        expect(handleMessageStub).to.have.not.been.called;
-    });
-
-    it('forwards to pending envs wait until resolve', async () => {
-        const middlemanHost = new BaseHost();
-        const aHost = new BaseHost();
-        const bHost = new BaseHost();
-
-        const mainCom = new Communication(middlemanHost, 'middle');
-        const bCom = new Communication(bHost, 'bEnv');
-        const aCom = new Communication(aHost, 'aEnv');
-
-        disposables.add(mainCom);
-        disposables.add(bCom);
-        disposables.add(aCom);
-
-        aCom.registerEnv('bEnv', middlemanHost); // bEnv is registered with middlemanHost
-
-        mainCom.registerEnv('aEnv', aHost);
-        mainCom.registerEnv('bEnv', bHost);
-
-        // bEnv is not ready to receive messages yet
-        void mainCom.envReady('bEnv');
-
-        bCom.registerEnv('aEnv', middlemanHost); // aEnv is registered with middlemanHost
-
-        const api = {
-            spy: spy(),
-        };
-        bCom.registerAPI({ id: 'myApi' }, api);
-
-        const mockApiProxyFromAEnv = aCom.apiProxy<typeof api>({ id: 'bEnv' }, { id: 'myApi' });
-        const done = mockApiProxyFromAEnv.spy();
-        // calling the remote api takes several micro ticks, so we wait one tick.
-        await sleep(0);
-        expect(api.spy).to.have.callCount(0);
-        mainCom.handleReady({ from: 'bEnv' });
-        await sleep(0);
-        expect(api.spy).to.have.callCount(1);
-        await done;
-    });
-
-    it('forwards listen calls', async () => {
-        const middlemanHost = new BaseHost();
-        const aHost = new BaseHost();
-        const bHost = new BaseHost();
-
-        const mainCom = new Communication(middlemanHost, 'middle');
-        const bCom = new Communication(bHost, 'bEnv');
-        const aCom = new Communication(aHost, 'aEnv');
-
-        disposables.add(mainCom);
-        disposables.add(bCom);
-        disposables.add(aCom);
-
-        aCom.registerEnv('bEnv', middlemanHost);
-        aCom.registerEnv('middle', middlemanHost);
-
-        mainCom.registerEnv('aEnv', aHost);
-        mainCom.registerEnv('bEnv', bHost);
-
-        bCom.registerEnv('middle', middlemanHost);
-        bCom.registerEnv('aEnv', middlemanHost);
-
-        const mockApi = getMockApi();
-        bCom.registerAPI({ id: 'myApi' }, mockApi);
-
-        const mockApiProxyFromAEnv = aCom.apiProxy<typeof mockApi>(
-            { id: 'bEnv' },
-            { id: 'myApi' },
-            {
-                listen: {
-                    listener: true,
-                },
-            },
-        );
-
-        const spyFn = spy();
-
-        await mockApiProxyFromAEnv.listen(spyFn);
-
-        const spyFn2 = spy();
-        await mockApiProxyFromAEnv.listen(spyFn2);
-        mockApi.invoke();
-
-        expect(spyFn).to.have.callCount(1);
-        expect(spyFn2).to.have.callCount(1);
-        expect(spyFn.calledWith(1)).to.eq(true);
-    });
-
-    it('forwards listen calls only if listener was configured', async () => {
-        const middlemanHost = new BaseHost();
-        const aHost = new BaseHost();
-        const bHost = new BaseHost();
-
-        const mainCom = new Communication(middlemanHost, 'middle');
-        const bCom = new Communication(bHost, 'bEnv');
-        const aCom = new Communication(aHost, 'aEnv');
-
-        disposables.add(mainCom);
-        disposables.add(bCom);
-        disposables.add(aCom);
-
-        aCom.registerEnv('bEnv', middlemanHost);
-        aCom.registerEnv('middle', middlemanHost);
-
-        mainCom.registerEnv('aEnv', aHost);
-        mainCom.registerEnv('bEnv', bHost);
-
-        bCom.registerEnv('middle', middlemanHost);
-        bCom.registerEnv('aEnv', middlemanHost);
-
-        const mockApi = getMockApi();
-        bCom.registerAPI({ id: 'myApi' }, mockApi);
-        const mockApiProxyFromAEnv = aCom.apiProxy<typeof mockApi>({ id: 'bEnv' }, { id: 'myApi' });
-
-        const spyFn = spy();
-        await expect(mockApiProxyFromAEnv.listen(spyFn)).to.be.eventually.rejectedWith(
-            'Cannot add listener to un-configured method myApi listen',
-        );
-    });
-
-    it('forwards dispose calls', async () => {
-        const middlemanHost = new BaseHost();
-        const aHost = new BaseHost();
-        const bHost = new BaseHost();
-
-        const mainCom = new Communication(middlemanHost, 'middle');
-        const bCom = new Communication(bHost, 'bEnv');
-        const aCom = new Communication(aHost, 'aEnv');
-
-        disposables.add(mainCom);
-        disposables.add(bCom);
-        disposables.add(aCom);
-
-        aCom.registerEnv('bEnv', middlemanHost);
-        bCom.registerEnv('aEnv', middlemanHost);
-        mainCom.registerEnv('aEnv', aHost);
-        mainCom.registerEnv('bEnv', bHost);
-        aCom.handleReady({ from: 'bEnv' });
-        bCom.handleReady({ from: 'anv' });
-
-        const echoService = {
-            echo() {
-                return 'echo';
-            },
-        };
-
-        bCom.registerAPI({ id: 'myApi' }, echoService);
-
-        const mockApiProxyFromAEnv = aCom.apiProxy<typeof echoService>({ id: 'bEnv' }, { id: 'myApi' });
-        const spyFn = spy();
-        bCom.subscribeToEnvironmentDispose(spyFn);
-        await mockApiProxyFromAEnv.echo();
-        aCom.clearEnvironment(aCom.getEnvironmentId());
-        await waitFor(() => {
-            expect(spyFn).to.have.been.calledWith(aCom.getEnvironmentId());
+            expect(callMessages).to.have.length(1);
+            expect(callMessages[0]!.callerIdentity).to.eq(undefined);
         });
-    });
 
-    it('forwards unlisten calls', async () => {
-        const middlemanHost = new BaseHost();
-        const aHost = new BaseHost();
-        const bHost = new BaseHost();
+        it('preserves callerIdentity when a message is forwarded through an intermediate environment', async () => {
+            const identity: CallerIdentity = { userId: 'forwarded-user' };
 
-        const mainCom = new Communication(middlemanHost, 'middle');
-        const bCom = new Communication(bHost, 'bEnv');
-        const aCom = new Communication(aHost, 'aEnv');
+            const host1 = new BaseHost();
+            const host2 = new BaseHost();
+            const host3 = new BaseHost();
 
-        disposables.add(mainCom);
-        disposables.add(bCom);
-        disposables.add(aCom);
+            const com1 = new Communication(host1, 'com1', {}, {}, false, { getCallerIdentity: () => identity });
+            const com2 = new Communication(host2, 'com2');
+            const com3 = new Communication(host3, 'com3');
 
-        aCom.registerEnv('bEnv', middlemanHost);
-        aCom.registerEnv('middle', middlemanHost);
+            // com1 <-> com2
+            const com2InHost1 = host1.open();
+            com1.registerEnv('com2', com2InHost1);
+            com2.registerMessageHandler(com2InHost1);
 
-        mainCom.registerEnv('aEnv', aHost);
-        mainCom.registerEnv('bEnv', bHost);
+            // com2 <-> com3
+            const com3InHost2 = host2.open();
+            com2.registerEnv('com3', com3InHost2);
+            com3.registerMessageHandler(com3InHost2);
 
-        bCom.registerEnv('middle', middlemanHost);
-        bCom.registerEnv('aEnv', middlemanHost);
+            // com1 routes com3-bound messages through com2, which forwards them to com3
+            com1.registerEnv('com3', com2InHost1);
 
-        const mockApi = getMockApi();
-        bCom.registerAPI({ id: 'myApi' }, mockApi);
+            // spy on messages as they arrive at com3 after being forwarded by com2
+            const forwardedCallMessages = collectCallMessages(com3InHost2);
 
-        const mockApiProxyFromAEnv = aCom.apiProxy<typeof mockApi>(
-            { id: 'bEnv' },
-            { id: 'myApi' },
-            {
-                listen: {
-                    listener: true,
-                },
-                unsubscribe: {
-                    removeListener: 'listen',
-                },
-            },
-        );
+            com3.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+            const proxy = com1.apiProxy<{ greet: () => string }>({ id: 'com3' }, { id: 'testApi' });
+            await proxy.greet();
 
-        const spyFn = spy();
-        const spyFn2 = spy();
-        await mockApiProxyFromAEnv.listen(spyFn);
-        await mockApiProxyFromAEnv.listen(spyFn2);
-        await mockApiProxyFromAEnv.unsubscribe(spyFn);
+            expect(forwardedCallMessages).to.have.length(1);
+            expect(forwardedCallMessages[0]!.callerIdentity).to.eql(identity);
+        });
 
-        mockApi.invoke();
+        it('attaches getCallerIdentity result to outbound listen messages', async () => {
+            const identity: CallerIdentity = { userId: 'subscriber', role: 'viewer' };
+            const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
 
-        expect(spyFn).to.have.callCount(0);
-        expect(spyFn2).to.have.callCount(1);
-        expect(mockApi.getListenersCount()).to.eq(1);
-        await mockApiProxyFromAEnv.unsubscribe(spyFn2);
-
-        mockApi.invoke();
-        expect(spyFn2).to.have.callCount(1);
-        expect(mockApi.getListenersCount()).to.eq(0);
-    });
-
-    it('communication handshake', async () => {
-        const testText = 'Yoo!';
-        const echoService: {
-            echo(s: string): string;
-        } = {
-            echo(s: string) {
-                return s;
-            },
-        };
-        const echoServiceComID = { id: 'echoService' };
-
-        const client1RootHost = new BaseHost();
-        const client2RootHost = new BaseHost();
-        const serverRootHost = new BaseHost();
-
-        const client1 = new Communication(client1RootHost, 'client1');
-        const client2 = new Communication(client2RootHost, 'client2');
-        const serverEnv = new Communication(serverRootHost, 'server');
-
-        // server env setup
-        const client1RemoteHost = client1RootHost.open();
-        serverEnv.registerMessageHandler(client1RemoteHost);
-        client1.registerEnv('server', client1RemoteHost);
-
-        const client2RemoteHost = client2RootHost.open();
-        serverEnv.registerMessageHandler(client2RemoteHost);
-        client2.registerEnv('server', client2RemoteHost);
-
-        serverEnv.registerAPI(echoServiceComID, echoService);
-
-        const echoServiceProxyInClient1 = client1.apiProxy<EchoService>(
-            Promise.resolve({ id: 'server' }),
-            echoServiceComID,
-        );
-        const echoServiceInstanceInClient2 = client2.apiProxy<EchoService>(
-            Promise.resolve({ id: 'server' }),
-            echoServiceComID,
-        );
-
-        const responseToClient1 = await echoServiceProxyInClient1.echo(testText);
-        const responseToClient2 = await echoServiceInstanceInClient2.echo(testText);
-
-        expect(responseToClient1, 'allow communication between calling environment and base').to.be.equal(testText);
-        expect(responseToClient2, 'allow communication between calling environment and base').to.be.equal(testText);
-
-        client1.registerAPI(echoServiceComID, echoService);
-        const echoServiceProxyFromServerToClient1 = serverEnv.apiProxy<EchoService>(
-            { id: 'client1' },
-            echoServiceComID,
-        );
-
-        expect(
-            await echoServiceProxyFromServerToClient1.echo(testText),
-            'after handshake is done - allow sending message from base to client1',
-        ).to.eq(testText);
-
-        client2.registerAPI(echoServiceComID, echoService);
-        const echoServiceProxyFromServerToClient2 = serverEnv.apiProxy<EchoService>(
-            { id: 'client2' },
-            echoServiceComID,
-        );
-
-        expect(
-            await echoServiceProxyFromServerToClient2.echo(testText),
-            'after handshake is done - allow sending message from base to client2',
-        ).to.eq(testText);
-    });
-
-    it('communication local clear remove listeners form registered services', async () => {
-        const echoService = {
-            handlers: new Set<(s: string) => void>(),
-            emit(s: string) {
-                for (const handler of this.handlers) {
-                    handler(s);
+            const listenMessages: Message[] = [];
+            hostChild.addEventListener('message', ({ data }) => {
+                if (data.type === 'listen') {
+                    listenMessages.push(data);
                 }
-            },
-            sub(fn: (s: string) => void) {
-                this.handlers.add(fn);
-            },
-            unsub(fn: (s: string) => void) {
-                this.handlers.delete(fn);
-            },
-        };
-        const echoServiceComID = { id: 'echoService' };
+            });
 
-        const client1RootHost = new BaseHost();
-        const serverRootHost = new BaseHost();
+            const mockApi = getMockApi();
+            comChild.registerAPI({ id: 'testApi' }, mockApi);
+            const proxy = comMain.apiProxy<typeof mockApi>(
+                { id: 'child' },
+                { id: 'testApi' },
+                { listen: { listener: true, emitOnly: true } },
+            );
 
-        const client1 = new Communication(client1RootHost, 'client1');
-        const serverEnv = new Communication(serverRootHost, 'server');
+            await proxy.listen(spy());
 
-        // server env setup
-        const client1RemoteHost = client1RootHost.open();
-        serverEnv.registerMessageHandler(client1RemoteHost);
-        client1.registerEnv('server', client1RemoteHost);
-
-        serverEnv.registerAPI(echoServiceComID, echoService);
-
-        const proxy = client1.apiProxy<typeof echoService>(Promise.resolve({ id: 'server' }), echoServiceComID, {
-            ...declareComEmitter('sub', 'unsub'),
-        });
-        const logs: string[] = [];
-        await proxy.sub((e) => {
-            logs.push(`event:${e}`);
-        });
-        echoService.emit('1');
-        expect(logs).to.eql(['event:1']);
-
-        serverEnv.clearEnvironment('client1');
-
-        echoService.emit('2');
-        expect(logs).to.eql(['event:1']);
-        expect(echoService.handlers.size, 'handler was removed').to.eq(0);
-    });
-
-    it('supports answering forwarded message from a forwarded message', async () => {
-        /**
-         * The flow of the test is as follows:
-         * setup communication in a way where:
-         *   1 talks to 2
-         *   3 talks to 4
-         *   1 talks to 3
-         *
-         * and then initiate a message from 2 to 4, which will be forwarded twice - when it will arrive to 1 and then to 3, and will be forwarded back twice using same mechanism
-         */
-        const host1 = new BaseHost();
-        const host2 = new BaseHost();
-        const host3 = new BaseHost();
-        const host4 = new BaseHost();
-
-        const com1 = new Communication(host1, 'com1');
-        const com2 = new Communication(host2, 'com2');
-        const com3 = new Communication(host3, 'com3');
-        const com4 = new Communication(host4, 'com4');
-
-        disposables.add(com1);
-        disposables.add(com2);
-        disposables.add(com3);
-        disposables.add(com4);
-
-        // 1 to 2
-        const com2ChildHost = host1.open();
-        com1.registerEnv('com2', com2ChildHost);
-        com2.registerMessageHandler(com2ChildHost);
-
-        // 3 to 4
-        const com4ChildHost = host3.open();
-        com3.registerEnv('com4', com4ChildHost);
-        com4.registerMessageHandler(com4ChildHost);
-
-        // 1 to 3
-        const com3ChildHost = host1.open();
-        com1.registerEnv('com3', com3ChildHost);
-        com3.registerMessageHandler(com3ChildHost);
-
-        // instruct 1 to send messages to 4 using 3
-        com1.registerEnv('com4', com3ChildHost);
-
-        // instruct 2 to send messages to 4 using 1
-        const com1ChildHost = host1.open();
-        com1.registerMessageHandler(com1ChildHost);
-        com2.registerEnv('com4', com1ChildHost);
-
-        // create a service at 4
-        const echoService = {
-            echo: (text: string) => `hello ${text}`,
-            fail: (): Promise<string> => {
-                return new Promise<string>(() => {
-                    throw new Error('fail');
-                });
-            },
-        };
-        com4.registerAPI({ id: 'service' }, echoService);
-
-        // call it from 2
-        const apiProxy = com2.apiProxy<typeof echoService>({ id: 'com4' }, { id: 'service' });
-        expect(await apiProxy.echo('name')).to.eq('hello name');
-        await expect(apiProxy.fail()).to.be.rejectedWith('fail');
-    });
-
-    it('does not stuck in endless forwarding message', async () => {
-        /**
-         * The flow of the test is as follows:
-         * there are env 1 and env 2.
-         * env 2 is registered in com1 but with wrong host
-         *
-         * call some API from 1 to 2 and check if env 1 is not stuck in endless message forwarding
-         */
-        const host1 = new BaseHost();
-        const host2 = new BaseHost();
-
-        const com1 = new Communication(host1, 'com1');
-        const com2 = new Communication(host2, 'com2');
-
-        disposables.add(com1);
-        disposables.add(com2);
-
-        // 1 to 2 with wrong host
-        com1.registerEnv('com2', host1);
-
-        // create a service at 4
-        const echoService = {
-            test: () => 'hello',
-        };
-        com2.registerAPI({ id: 'service' }, echoService);
-
-        // call it from 1
-        const apiProxy = com1.apiProxy<typeof echoService>({ id: 'com2' }, { id: 'service' });
-
-        await expect(apiProxy.test()).to.be.rejected;
-    });
-    it('should report env re connection', () => {
-        const onEnvReconnect = spy();
-        const hostA = new BaseHost();
-        const hostB = new BaseHost();
-        const comA = new Communication(hostA, 'A');
-        const comB = new Communication(hostB, 'B'); // ready is ignored since nothing is connected
-        comA.registerEnv('B', hostB);
-        comA.registerMessageHandler(hostB);
-        comB.registerEnv('A', hostA);
-        comB.registerMessageHandler(hostA);
-
-        comA.subscribeToEnvironmentReconnect(onEnvReconnect);
-
-        new Communication(hostB, 'B'); // first ready
-
-        expect(onEnvReconnect).to.have.have.callCount(0);
-
-        new Communication(hostB, 'B'); // re-connect
-
-        expect(onEnvReconnect).to.have.have.callCount(1);
-    });
-    it('should auto connect event listeners when env is re-connected', async () => {
-        const onEventReconnect = spy();
-        const onEventEmitterCall = spy();
-        const hostA = new BaseHost('A-host');
-        const hostB = hostA.open('B-host');
-        const comA = new Communication(hostA, 'A');
-        const comB_api1 = { service: getMockApi() };
-        const comB = new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api1 });
-        comA.registerEnv('B', hostB);
-        comB.registerEnv('A', hostA);
-        comA.subscribeToEnvironmentReconnect(onEventReconnect);
-
-        // setup api between comA and comB
-        const apiProxy = comA.apiProxy<typeof comB_api1.service>(
-            { id: 'B' },
-            { id: 'service' },
-            { listen: { listener: true, emitOnly: true } },
-        );
-
-        await apiProxy.listen(onEventEmitterCall);
-
-        comB_api1.service.invoke();
-
-        await waitFor(() => {
-            expect(onEventEmitterCall, 'invoked event before reconnect').to.have.have.callCount(1);
+            expect(listenMessages).to.have.length(1);
+            expect(listenMessages[0]!.callerIdentity).to.eql(identity);
         });
 
-        // simulate unavailable communication
-        comB.removeMessageHandler(hostB);
-        // reconnect
-        const comB_api2 = { service: getMockApi() };
-        new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api2 });
+        it('attaches getCallerIdentity result to outbound unlisten messages', async () => {
+            const identity: CallerIdentity = { userId: 'subscriber', role: 'viewer' };
+            const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
 
-        await waitFor(() => {
-            expect(onEventReconnect, 'reconnected').to.been.calledWith('B');
-            expect(comB_api2.service.getListenersCount(), 'event handler re-register').to.eq(1);
-        });
+            const unlistenMessages: Message[] = [];
+            hostChild.addEventListener('message', ({ data }) => {
+                if (data.type === 'unlisten') {
+                    unlistenMessages.push(data);
+                }
+            });
 
-        comB_api2.service.invoke();
+            const mockApi = getMockApi();
+            comChild.registerAPI({ id: 'testApi' }, mockApi);
+            const proxy = comMain.apiProxy<typeof mockApi>(
+                { id: 'child' },
+                { id: 'testApi' },
+                {
+                    listen: { listener: true, emitOnly: true },
+                    unsubscribe: { emitOnly: true, removeListener: 'listen' },
+                },
+            );
 
-        await waitFor(() => {
-            expect(onEventEmitterCall, 'invoked event after reconnect').to.have.have.callCount(2);
+            const handler = spy();
+            await proxy.listen(handler);
+            await proxy.unsubscribe(handler);
+
+            expect(unlistenMessages).to.have.length(1);
+            expect(unlistenMessages[0]!.callerIdentity).to.eql(identity);
         });
     });
-    it('should auto connect event listeners when env is re-connected (replaced host)', async () => {
-        const onEventReconnect = spy();
-        const onEventEmitterCall = spy();
-        const hostA = new BaseHost('A-host');
-        const hostB = hostA.open('B-host');
-        const comA = new Communication(hostA, 'A');
-        const comB_api1 = { service: getMockApi() };
-        const comB = new Communication(hostB, 'B', undefined, undefined, undefined, { apis: comB_api1 });
-        comA.registerEnv('B', hostB);
-        comB.registerEnv('A', hostA);
-        comA.subscribeToEnvironmentReconnect(onEventReconnect);
 
-        // setup api between comA and comB
-        const apiProxy = comA.apiProxy<typeof comB_api1.service>(
-            { id: 'B' },
-            { id: 'service' },
-            { listen: { listener: true, emitOnly: true } },
-        );
+    describe('apiCallWrapper', () => {
+        it('is invoked for incoming call messages', async () => {
+            const wrappedMessages: Message[] = [];
+            const { comMain, comChild } = setupCrossEnvCommunication(undefined, {
+                apiCallWrapper: (message, apiCall) => {
+                    wrappedMessages.push(message);
+                    return apiCall();
+                },
+            });
 
-        await apiProxy.listen(onEventEmitterCall);
+            comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+            const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+            const result = await proxy.greet();
 
-        comB_api1.service.invoke();
-
-        await waitFor(() => {
-            expect(onEventEmitterCall, 'invoked event before reconnect').to.have.have.callCount(1);
+            const callMessage = wrappedMessages[0];
+            expect(callMessage!.from).to.eql('main');
+            expect(callMessage!.type).to.eql('call');
+            expect(result).to.eql('hello');
         });
 
-        // simulate unavailable communication
-        comB.removeMessageHandler(hostB);
-        // reconnect - simulate another window
-        const hostB_2 = new BaseHost('B-host-2'); //hostA.open('B-host-2');
-        comA.registerMessageHandler(hostB_2);
-        const comB_api2 = { service: getMockApi() };
-        new Communication(hostB_2, 'B', undefined, undefined, undefined, { apis: comB_api2 });
+        it('errors in the wrapper are returned', async () => {
+            const wrapperError = new Error('wrapper error');
+            const { comMain, comChild } = setupCrossEnvCommunication(undefined, {
+                apiCallWrapper: () => {
+                    throw wrapperError;
+                },
+            });
 
-        await waitFor(() => {
-            expect(onEventReconnect, 'reconnected').to.been.calledWith('B');
-            expect(comB_api2.service.getListenersCount(), 'event handler re-register').to.eq(1);
+            comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
+            const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
+
+            await expect(proxy.greet()).to.be.rejectedWith('wrapper error');
         });
 
-        comB_api2.service.invoke();
+        it('is invoked for incoming listen messages', async () => {
+            const wrappedMessages: Message[] = [];
+            const { comMain, comChild } = setupCrossEnvCommunication(undefined, {
+                apiCallWrapper: (message, apiCall) => {
+                    wrappedMessages.push(message);
+                    return apiCall();
+                },
+            });
 
-        await waitFor(() => {
-            expect(onEventEmitterCall, 'invoked event after reconnect').to.have.have.callCount(2);
+            const mockApi = getMockApi();
+            comChild.registerAPI({ id: 'testApi' }, mockApi);
+            const proxy = comMain.apiProxy<typeof mockApi>(
+                { id: 'child' },
+                { id: 'testApi' },
+                { listen: { listener: true, emitOnly: true } },
+            );
+            await proxy.listen(spy());
+
+            const listenMessage = wrappedMessages[0];
+            expect(listenMessage!.from).to.eql('main');
+            expect(listenMessage!.type).to.eql('listen');
+        });
+
+        it('is invoked for incoming unlisten messages', async () => {
+            const wrappedMessages: Message[] = [];
+            const { comMain, comChild } = setupCrossEnvCommunication(undefined, {
+                apiCallWrapper: (message, apiCall) => {
+                    wrappedMessages.push(message);
+                    return apiCall();
+                },
+            });
+
+            const mockApi = getMockApi();
+            comChild.registerAPI({ id: 'testApi' }, mockApi);
+            const proxy = comMain.apiProxy<typeof mockApi>(
+                { id: 'child' },
+                { id: 'testApi' },
+                {
+                    listen: { listener: true, emitOnly: true },
+                    unsubscribe: { emitOnly: true, removeListener: 'listen' },
+                },
+            );
+            const handler = spy();
+            await proxy.listen(handler);
+            await proxy.unsubscribe(handler);
+
+            const unlistenMessage = wrappedMessages[0];
+            expect(unlistenMessage!.from).to.eql('main');
+            expect(unlistenMessage!.type).to.eql('unlisten');
+        });
+
+        it('is invoked for incoming event messages', async () => {
+            const wrappedMessages: Message[] = [];
+            const { comMain, comChild } = setupCrossEnvCommunication({
+                apiCallWrapper: (message, apiCall) => {
+                    wrappedMessages.push(message);
+                    return apiCall();
+                },
+            });
+
+            const mockApi = getMockApi();
+            comChild.registerAPI({ id: 'testApi' }, mockApi);
+            const proxy = comMain.apiProxy<typeof mockApi>(
+                { id: 'child' },
+                { id: 'testApi' },
+                { listen: { listener: true, emitOnly: true } },
+            );
+            await proxy.listen(spy());
+            mockApi.invoke();
+            await sleep(0);
+
+            const eventMessage = wrappedMessages[0];
+            expect(eventMessage!.to).to.eql('main');
+            expect(eventMessage!.type).to.eql('event');
         });
     });
 });
@@ -1151,154 +1424,6 @@ describe('environment-dependencies communication', () => {
 
         const env1EngineEnv2 = new RuntimeEngine(env2);
         await env1EngineEnv2.run([f]);
-    });
-});
-
-describe('CallerIdentity', () => {
-    function setupCrossEnvCommunication(callerIdentityOptions?: {
-        getCallerIdentity: () => CallerIdentity | undefined;
-    }) {
-        const hostMain = new BaseHost();
-        const hostChild = hostMain.open();
-        const comMain = new Communication(hostMain, 'main', {}, {}, false, callerIdentityOptions);
-        const comChild = new Communication(hostChild, 'child');
-        comMain.registerEnv('child', hostChild);
-        comChild.registerEnv('main', hostMain);
-        return { comMain, comChild, hostMain, hostChild };
-    }
-
-    function collectCallMessages(host: BaseHost): Message[] {
-        const collected: Message[] = [];
-        host.addEventListener('message', ({ data }) => {
-            if (data.type === 'call') {
-                collected.push(data);
-            }
-        });
-        return collected;
-    }
-
-    it('attaches getCallerIdentity result to outbound call messages', async () => {
-        const identity: CallerIdentity = { userId: 'test-user', role: 'admin' };
-        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
-        const callMessages = collectCallMessages(hostChild);
-
-        comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
-        const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
-        await proxy.greet();
-
-        expect(callMessages).to.have.length(1);
-        expect(callMessages[0]!.callerIdentity).to.eql(identity);
-    });
-
-    it('uses undefined as default callerIdentity when getCallerIdentity is not provided', async () => {
-        const { comMain, comChild, hostChild } = setupCrossEnvCommunication();
-        const callMessages = collectCallMessages(hostChild);
-
-        comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
-        const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
-        await proxy.greet();
-
-        expect(callMessages).to.have.length(1);
-        expect(callMessages[0]!.callerIdentity).to.eql(undefined);
-    });
-
-    it('sets callerIdentity to undefined when getCallerIdentity returns undefined', async () => {
-        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => undefined });
-        const callMessages = collectCallMessages(hostChild);
-
-        comChild.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
-        const proxy = comMain.apiProxy<{ greet: () => string }>({ id: 'child' }, { id: 'testApi' });
-        await proxy.greet();
-
-        expect(callMessages).to.have.length(1);
-        expect(callMessages[0]!.callerIdentity).to.eq(undefined);
-    });
-
-    it('preserves callerIdentity when a message is forwarded through an intermediate environment', async () => {
-        const identity: CallerIdentity = { userId: 'forwarded-user' };
-
-        const host1 = new BaseHost();
-        const host2 = new BaseHost();
-        const host3 = new BaseHost();
-
-        const com1 = new Communication(host1, 'com1', {}, {}, false, { getCallerIdentity: () => identity });
-        const com2 = new Communication(host2, 'com2');
-        const com3 = new Communication(host3, 'com3');
-
-        // com1 <-> com2
-        const com2InHost1 = host1.open();
-        com1.registerEnv('com2', com2InHost1);
-        com2.registerMessageHandler(com2InHost1);
-
-        // com2 <-> com3
-        const com3InHost2 = host2.open();
-        com2.registerEnv('com3', com3InHost2);
-        com3.registerMessageHandler(com3InHost2);
-
-        // com1 routes com3-bound messages through com2, which forwards them to com3
-        com1.registerEnv('com3', com2InHost1);
-
-        // spy on messages as they arrive at com3 after being forwarded by com2
-        const forwardedCallMessages = collectCallMessages(com3InHost2);
-
-        com3.registerAPI({ id: 'testApi' }, { greet: () => 'hello' });
-        const proxy = com1.apiProxy<{ greet: () => string }>({ id: 'com3' }, { id: 'testApi' });
-        await proxy.greet();
-
-        expect(forwardedCallMessages).to.have.length(1);
-        expect(forwardedCallMessages[0]!.callerIdentity).to.eql(identity);
-    });
-
-    it('attaches getCallerIdentity result to outbound listen messages', async () => {
-        const identity: CallerIdentity = { userId: 'subscriber', role: 'viewer' };
-        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
-
-        const listenMessages: Message[] = [];
-        hostChild.addEventListener('message', ({ data }) => {
-            if (data.type === 'listen') {
-                listenMessages.push(data);
-            }
-        });
-
-        const mockApi = getMockApi();
-        comChild.registerAPI({ id: 'testApi' }, mockApi);
-        const proxy = comMain.apiProxy<typeof mockApi>(
-            { id: 'child' },
-            { id: 'testApi' },
-            { listen: { listener: true, emitOnly: true } },
-        );
-
-        await proxy.listen(spy());
-
-        expect(listenMessages).to.have.length(1);
-        expect(listenMessages[0]!.callerIdentity).to.eql(identity);
-    });
-
-    it('attaches getCallerIdentity result to outbound unlisten messages', async () => {
-        const identity: CallerIdentity = { userId: 'subscriber', role: 'viewer' };
-        const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
-
-        const unlistenMessages: Message[] = [];
-        hostChild.addEventListener('message', ({ data }) => {
-            if (data.type === 'unlisten') {
-                unlistenMessages.push(data);
-            }
-        });
-
-        const mockApi = getMockApi();
-        comChild.registerAPI({ id: 'testApi' }, mockApi);
-        const proxy = comMain.apiProxy<typeof mockApi>(
-            { id: 'child' },
-            { id: 'testApi' },
-            { listen: { listener: true, emitOnly: true }, unsubscribe: { emitOnly: true, removeListener: 'listen' } },
-        );
-
-        const handler = spy();
-        await proxy.listen(handler);
-        await proxy.unsubscribe(handler);
-
-        expect(unlistenMessages).to.have.length(1);
-        expect(unlistenMessages[0]!.callerIdentity).to.eql(identity);
     });
 });
 

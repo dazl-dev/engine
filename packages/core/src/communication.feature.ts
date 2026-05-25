@@ -10,7 +10,7 @@ import { Slot } from './entities/slot.js';
 import { RUN_OPTIONS, ENGINE } from './symbols.js';
 import { type LoggerTransport, LogLevel } from './types.js';
 import { WindowInitializerService } from './com/window-initializer-service.js';
-import { CallerIdentity } from './com/message-types.js';
+import { CallerIdentity, Message } from './com/message-types.js';
 
 export interface IComConfig {
     id?: string;
@@ -25,6 +25,7 @@ export interface IComConfig {
         [environmentId: string]: ConfigEnvironmentRecord;
     };
     getCallerIdentity?: () => CallerIdentity | undefined;
+    apiCallWrapper?: (message: Message, apiCall: () => unknown) => unknown;
 }
 export default class COM extends Feature<'COM'> {
     id = 'COM' as const;
@@ -74,6 +75,7 @@ COM.setup(
             publicPath,
             connectedEnvironments = {},
             getCallerIdentity,
+            apiCallWrapper,
         },
         loggerTransports,
         [RUN_OPTIONS]: runOptions,
@@ -98,6 +100,7 @@ COM.setup(
             publicPath,
             connectedEnvironments,
             getCallerIdentity,
+            apiCallWrapper,
         };
         const communication = new Communication(
             isNode ? host || new BaseHost() : host || self,
