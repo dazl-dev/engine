@@ -1245,6 +1245,34 @@ describe('Communication', () => {
             expect(unlistenMessages).to.have.length(1);
             expect(unlistenMessages[0]!.callerIdentity).to.eql(identity);
         });
+
+        it('attaches getCallerIdentity result to event messages', async () => {
+            const identity: CallerIdentity = { userId: 'test-user', role: 'admin' };
+            const { comMain, comChild, hostChild } = setupCrossEnvCommunication({ getCallerIdentity: () => identity });
+
+            const eventMessages: Message[] = [];
+            hostChild.addEventListener('message', ({ data }) => {
+                if (data.type === 'event') {
+                    eventMessages.push(data);
+                }
+            });
+
+            const mockApi = getMockApi();
+            comMain.registerAPI({ id: 'testApi' }, mockApi);
+            const proxy = comChild.apiProxy<typeof mockApi>(
+                { id: 'main' },
+                { id: 'testApi' },
+                { listen: { listener: true, emitOnly: true } },
+            );
+
+            await proxy.listen(spy());
+            mockApi.invoke();
+            await waitFor(() => {
+                expect(eventMessages).to.have.length(1);
+            });
+
+            expect(eventMessages[0]!.callerIdentity).to.eql(identity);
+        });
     });
 
     describe('apiCallWrapper', () => {

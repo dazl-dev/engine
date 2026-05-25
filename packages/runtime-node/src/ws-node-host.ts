@@ -116,6 +116,8 @@ export class WsServerHost extends BaseHost implements IDisposable {
                 const identity = extractor(socket.handshake, clientId);
                 if (identity) {
                     this.identityStore.set(clientId, identity);
+                } else {
+                    this.identityStore.delete(clientId);
                 }
             });
         }
@@ -149,6 +151,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
             // modify message to be able to forward it
             message.from = fromId;
             message.origin = originId;
+            // we always set clientIdentity, even if undefined to prevent client from passing something.
             message.callerIdentity = this.identityStore.get(clientId);
 
             this.emitMessageHandlers(message);

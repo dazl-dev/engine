@@ -1061,6 +1061,7 @@ export class Communication {
                     data: args,
                     handlerId: message.handlerId,
                     origin: this.rootEnvId,
+                    callerIdentity: this.options.getCallerIdentity(),
                 });
             };
             this.eventDispatchers.set(namespacedHandlerId, { dispatcher, message });
