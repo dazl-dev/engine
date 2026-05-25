@@ -1327,7 +1327,9 @@ describe('Communication', () => {
             await proxy.listen(handler);
             await proxy.unsubscribe(handler);
 
-            const unlistenMessage = wrappedMessages[0];
+            const listenMessage = wrappedMessages[0];
+            expect(listenMessage!.type).to.eql('listen');
+            const unlistenMessage = wrappedMessages[1];
             expect(unlistenMessage!.from).to.eql('main');
             expect(unlistenMessage!.type).to.eql('unlisten');
         });
