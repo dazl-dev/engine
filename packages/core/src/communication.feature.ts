@@ -10,7 +10,7 @@ import { Slot } from './entities/slot.js';
 import { RUN_OPTIONS, ENGINE } from './symbols.js';
 import { type LoggerTransport, LogLevel } from './types.js';
 import { WindowInitializerService } from './com/window-initializer-service.js';
-import { CallerIdentity, Message } from './com/message-types.js';
+import type { CallerIdentity, Message } from './com/message-types.js';
 
 export interface IComConfig {
     id?: string;
