@@ -26,8 +26,8 @@
     "@dazl/create-disposables": "^18.10.0",
     "@dazl/wait-for-call": "^18.10.0",
     "@eslint/js": "^10.0.1",
-    "@file-services/memory": "^11.0.1",
-    "@file-services/types": "^11.0.1",
+    "@file-services/memory": "^11.1.0",
+    "@file-services/types": "^11.1.0",
     "@playwright/browser-chromium": "^1.60.0",
     "@types/chai": "^5.2.3",
     "@types/chai-as-promised": "^8.0.2",
@@ -59,7 +59,7 @@
     "sinon": "^22.0.0",
     "sinon-chai": "^4.0.1",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.59.4",
+    "typescript-eslint": "^8.60.0",
     "typescript-type-utils": "^0.1.0"
   },
   "license": "MIT"
