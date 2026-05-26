@@ -24,6 +24,7 @@ import { BaseHost } from './hosts/base-host.js';
 import { WsClientHost } from './hosts/ws-client-host.js';
 import type {
     CallbackMessage,
+    CallerIdentity,
     CallMessage,
     EventMessage,
     ListenMessage,
@@ -72,6 +73,7 @@ export interface CommunicationOptions {
     publicPath?: string;
     connectedEnvironments?: { [environmentId: string]: ConfigEnvironmentRecord };
     apis?: RemoteAPIServicesMapping;
+    getCallerIdentity?: () => CallerIdentity | undefined;
 }
 
 /**
@@ -117,6 +119,7 @@ export class Communication {
             connectedEnvironments: {},
             apis: {},
             ...options,
+            getCallerIdentity: options?.getCallerIdentity ?? (() => undefined),
         };
         this.rootEnvId = id;
         this.rootEnvName = id.split('/')[0]!;
@@ -373,6 +376,7 @@ export class Communication {
                     data: { api, method, args: serializeApiCallArguments(args) },
                     callbackId,
                     origin,
+                    callerIdentity: this.options.getCallerIdentity(),
                 };
                 this.callWithCallback(envId, message, callbackId, res, rej);
             }
@@ -698,6 +702,7 @@ export class Communication {
                 type: 'callback',
                 forwardingChain: message.forwardingChain,
                 error: new CircularForwardingError(message, this.rootEnvId, env.id),
+                callerIdentity: message.callerIdentity,
             });
             return;
         } else if (this.DEBUG) {
@@ -771,6 +776,7 @@ export class Communication {
                     },
                     handlerId: listenerHandlerId,
                     origin,
+                    callerIdentity: this.options.getCallerIdentity(),
                 };
                 // sometimes the callback will never happen since target environment is already dead
                 this.sendTo(envId, message);
@@ -802,6 +808,7 @@ export class Communication {
                         handlerId: '',
                         callbackId,
                         origin,
+                        callerIdentity: this.options.getCallerIdentity(),
                     };
                     message.handlerId = this.createHandlerRecord(envId, api, method, fn, message);
 
@@ -1044,6 +1051,7 @@ export class Communication {
                     data: args,
                     handlerId: message.handlerId,
                     origin: this.rootEnvId,
+                    callerIdentity: this.options.getCallerIdentity(),
                 });
             };
             this.eventDispatchers.set(namespacedHandlerId, { dispatcher, message });
