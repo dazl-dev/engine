@@ -74,6 +74,7 @@ export interface CommunicationOptions {
     connectedEnvironments?: { [environmentId: string]: ConfigEnvironmentRecord };
     apis?: RemoteAPIServicesMapping;
     getCallerIdentity?: () => CallerIdentity | undefined;
+    apiCallWrapper?: <T>(message: Message, apiCall: () => T) => T;
 }
 
 /**
@@ -120,6 +121,7 @@ export class Communication {
             apis: {},
             ...options,
             getCallerIdentity: options?.getCallerIdentity ?? (() => undefined),
+            apiCallWrapper: options?.apiCallWrapper ?? ((_, apiCall) => apiCall()),
         };
         this.rootEnvId = id;
         this.rootEnvName = id.split('/')[0]!;
@@ -877,9 +879,11 @@ export class Communication {
         if (!handlers) {
             return;
         }
-        for (const handler of handlers.callbacks) {
-            handler(...message.data);
-        }
+        this.options.apiCallWrapper(message, () => {
+            for (const handler of handlers.callbacks) {
+                handler(...message.data);
+            }
+        });
     }
 
     public handleReady({ from }: { from: string }): void {
@@ -946,7 +950,9 @@ export class Communication {
         const dispatcher = this.eventDispatchers.get(namespacedHandlerId)?.dispatcher;
         if (dispatcher) {
             this.eventDispatchers.delete(namespacedHandlerId);
-            const data = await this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]);
+            const data = await this.options.apiCallWrapper(message, () =>
+                this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]),
+            );
             if (message.callbackId) {
                 this.sendTo(message.from, {
                     to: message.from,
@@ -964,7 +970,9 @@ export class Communication {
         try {
             const dispatcher = this.getDispatcher(message.from, message);
 
-            const data = await this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]);
+            const data = await this.options.apiCallWrapper(message, () =>
+                this.apiCall(message.origin, message.data.api, message.data.method, [dispatcher]),
+            );
 
             if (message.callbackId) {
                 this.sendTo(message.from, {
@@ -991,7 +999,9 @@ export class Communication {
     private async handleCall(message: CallMessage): Promise<void> {
         try {
             const args = deserializeApiCallArguments(message.data.args);
-            const data = await this.apiCall(message.origin, message.data.api, message.data.method, args);
+            const data = await this.options.apiCallWrapper(message, () =>
+                this.apiCall(message.origin, message.data.api, message.data.method, args),
+            );
 
             if (message.callbackId) {
                 this.sendTo(message.from, {
