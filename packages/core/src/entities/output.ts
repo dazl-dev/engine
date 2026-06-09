@@ -9,8 +9,7 @@ export abstract class FeatureOutput<
     ProvidedFrom extends EnvVisibility,
     VisibleAt extends EnvVisibility,
     RemoteAccess extends boolean,
-> implements Entity<Type, Proxy, ProvidedFrom, VisibleAt, 'output', RemoteAccess>
-{
+> implements Entity<Type, Proxy, ProvidedFrom, VisibleAt, 'output', RemoteAccess> {
     public mode = 'output' as const;
     public type = runtimeType<Type>();
     public proxyType = runtimeType<Proxy>();

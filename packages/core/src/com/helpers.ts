@@ -12,7 +12,10 @@ export function isWorkerContext(target: unknown): target is Worker {
 }
 
 export function isWindow(win: unknown): win is Window {
-    return typeof Window !== 'undefined' && win instanceof Window || (win instanceof BaseHost && win.parent !== undefined);
+    return (
+        (typeof Window !== 'undefined' && win instanceof Window) ||
+        (win instanceof BaseHost && win.parent !== undefined)
+    );
 }
 
 export function isIframe(iframe: unknown): iframe is HTMLIFrameElement {

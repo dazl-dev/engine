@@ -55,8 +55,10 @@ export type LoadStatement = Pick<
     | 'absImports'
 >;
 
-export interface LoadStatementArguments
-    extends Pick<FeatureLoaderArguments, 'filePath' | 'directoryPath' | 'packageName'> {
+export interface LoadStatementArguments extends Pick<
+    FeatureLoaderArguments,
+    'filePath' | 'directoryPath' | 'packageName'
+> {
     moduleIdentifier: string;
     eagerEntrypoint?: boolean;
     absImports?: boolean;

@@ -3,8 +3,5 @@
   "compilerOptions": {
     "outDir": "../dist"
   },
-  "references": [
-    { "path": "../../../packages/core/src" },
-    { "path": "../../../packages/runtime-node/src" },
-  ]
+  "references": [{ "path": "../../../packages/core/src" }, { "path": "../../../packages/runtime-node/src" }]
 }

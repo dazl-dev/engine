@@ -7,8 +7,7 @@ export abstract class FeatureInput<
     Type,
     ProvidedFrom extends EnvVisibility,
     VisibleAt extends EnvVisibility = ProvidedFrom,
-> implements Entity<Type, Type, ProvidedFrom, VisibleAt, 'input', false>
-{
+> implements Entity<Type, Type, ProvidedFrom, VisibleAt, 'input', false> {
     public mode = 'input' as const;
     public type = runtimeType<Type>();
     public proxyType = runtimeType<Type>();
