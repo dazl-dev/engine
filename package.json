@@ -49,7 +49,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-no-only-tests": "^3.4.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "mocha": "12.0.0-beta-9.4",
+    "mocha": "^12.0.0-rc.1",
     "mocha-web": "^3.0.0",
     "prettier": "^3.8.4",
     "promise-assist": "^2.0.1",
