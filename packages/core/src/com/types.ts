@@ -7,14 +7,7 @@ export type SerializableArguments = unknown[];
 export type SerializableMethod = (...args: SerializableArguments) => void;
 
 export type EnvironmentTypes =
-    | 'window'
-    | 'iframe'
-    | 'webworker'
-    | 'workerthread'
-    | 'node'
-    | 'context'
-    | 'electron-renderer'
-    | 'electron-main';
+    'window' | 'iframe' | 'webworker' | 'workerthread' | 'node' | 'context' | 'electron-renderer' | 'electron-main';
 /**
  * TODO: remove onReconnect and onDisconnect
  */

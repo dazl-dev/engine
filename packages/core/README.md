@@ -36,12 +36,8 @@ import { Feature } from '@dazl/engine-core';
 export default new Feature({
   id: 'myFeature' /* unique id for the feature */,
 
-  dependencies: [
-    /* other features the feature depends on */
-  ],
+  dependencies: [/* other features the feature depends on */],
 
-  api: {
-    /* slots, services, and configurations of the feature */
-  },
+  api: {/* slots, services, and configurations of the feature */},
 });
 ```
