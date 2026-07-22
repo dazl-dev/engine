@@ -113,44 +113,57 @@ class FaultInjectingHost extends BaseHost {
     }
 }
 
-/** Controls the (single) client<->server link of the lab. */
+export interface FaultScope {
+    /** Limit the fault to a single client env by name (default: all clients). */
+    client?: string;
+}
+
+/** Controls the client<->server links of the lab. */
 export class NetworkControl {
     constructor(
         private tcpSockets: Set<NetSocket>,
-        private clientGates: () => Array<{ outgoing: FaultGate; incoming: FaultGate }>,
+        private clientGates: () => Array<{ name: string; outgoing: FaultGate; incoming: FaultGate }>,
     ) {}
 
-    /** Silently drop the next `count` messages sent from any client to the server. */
-    dropNextClientToServer(count = 1) {
-        for (const { outgoing } of this.clientGates()) {
+    private gates(scope?: FaultScope) {
+        const gates = this.clientGates().filter(({ name }) => !scope?.client || name === scope.client);
+        if (scope?.client && gates.length === 0) {
+            throw new Error(`no client env named "${scope.client}"`);
+        }
+        return gates;
+    }
+
+    /** Silently drop the next `count` messages sent from a client to the server. */
+    dropNextClientToServer(count = 1, scope?: FaultScope) {
+        for (const { outgoing } of this.gates(scope)) {
             outgoing.dropNext(count);
         }
     }
 
     /** Deliver the next client-to-server message twice. */
-    duplicateNextClientToServer(count = 1) {
-        for (const { outgoing } of this.clientGates()) {
+    duplicateNextClientToServer(count = 1, scope?: FaultScope) {
+        for (const { outgoing } of this.gates(scope)) {
             outgoing.duplicateNext(count);
         }
     }
 
     /** Queue client-to-server messages instead of delivering them. */
-    holdClientToServer() {
-        for (const { outgoing } of this.clientGates()) {
+    holdClientToServer(scope?: FaultScope) {
+        for (const { outgoing } of this.gates(scope)) {
             outgoing.hold();
         }
     }
 
     /** Deliver all held client-to-server messages, optionally in reverse order. */
-    releaseClientToServer(options: { reversed?: boolean } = {}) {
-        for (const { outgoing } of this.clientGates()) {
+    releaseClientToServer(options: { reversed?: boolean } & FaultScope = {}) {
+        for (const { outgoing } of this.gates(options)) {
             outgoing.release(options);
         }
     }
 
-    /** Silently drop the next `count` messages sent from the server to any client. */
-    dropNextServerToClient(count = 1) {
-        for (const { incoming } of this.clientGates()) {
+    /** Silently drop the next `count` messages sent from the server to a client. */
+    dropNextServerToClient(count = 1, scope?: FaultScope) {
+        for (const { incoming } of this.gates(scope)) {
             incoming.dropNext(count);
         }
     }
@@ -206,7 +219,12 @@ export class ClientEnv {
         private serverEnvNames: string[],
     ) {}
 
-    /** Get a typed async proxy to an API exposed by a server environment. */
+    /** Register an API implementation that remote environments can call. */
+    exposeApi<T extends object>(apiId: string, implementation: T): T {
+        return this.com.registerAPI({ id: apiId }, implementation);
+    }
+
+    /** Get a typed async proxy to an API exposed by a remote environment. */
     remoteApi<T extends object>(
         targetEnv: string,
         apiId: string,
@@ -263,7 +281,7 @@ export class CommLab {
         this.network = new NetworkControl(this.tcpSockets, () =>
             [...this.clientEnvs.values()].map((client) => {
                 const { faultHost } = client.getInternals();
-                return { outgoing: faultHost.outgoing, incoming: faultHost.incoming };
+                return { name: client.name, outgoing: faultHost.outgoing, incoming: faultHost.incoming };
             }),
         );
     }
@@ -281,9 +299,20 @@ export class CommLab {
         return new CommLab(`http://localhost:${port}/lab`, wsServerHost, socketServer, tcpSockets);
     }
 
-    /** Create an environment on the server side of the socket. */
+    /**
+     * Create an environment on the server side of the socket. Mirrors the
+     * production wiring (`node-env-manager`): every message arriving on the
+     * socket registers its `from` env on the server communication, enabling
+     * client-to-client forwarding through the server.
+     */
     addServerEnv(name: string): ServerEnv {
-        const env = new ServerEnv(name, new Communication(this.wsServerHost, name));
+        const com = new Communication(this.wsServerHost, name);
+        this.wsServerHost.addEventListener('message', ({ data }) => {
+            if (data.from && com.getEnvironmentHost(data.from) === undefined) {
+                com.registerEnv(data.from, this.wsServerHost);
+            }
+        });
+        const env = new ServerEnv(name, com);
         this.serverEnvs.set(name, env);
         return env;
     }
