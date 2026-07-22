@@ -10,8 +10,6 @@ import { CommLab } from '../test-kit/comm-lab.js';
  * faults (cuts, drops, duplication, reordering). Tests marked
  * "documented gap" pin down current — undesired — behavior on purpose:
  * when the gap is fixed, the test should be flipped to assert the new contract.
- *
- * Every test is self-contained and reads as setup / action / expectation.
  */
 describe('transport resilience (real socket)', function () {
     this.timeout(15_000);
@@ -22,25 +20,21 @@ describe('transport resilience (real socket)', function () {
     });
 
     it('completes a remote api call between real socket peers', async () => {
-        // setup: a server env exposing a calculator, a client env connected over a real socket
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
         server.exposeApi('calculator', { add: (a: number, b: number) => a + b });
 
-        // action: call the api through the socket
         const calculator = client.remoteApi<{ add(a: number, b: number): Promise<number> }>(
             'processing',
             'calculator',
         );
         const result = await calculator.add(1, 2);
 
-        // expectation: the call round-trips with the correct result
         expect(result).to.equal(3);
     });
 
     it('receives server-pushed events for a registered listener', async () => {
-        // setup: a server api with a subscribe/unsubscribe pair, and a client listener
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -57,15 +51,12 @@ describe('transport resilience (real socket)', function () {
         const received: string[] = [];
         await ticker.onTick((value) => received.push(value));
 
-        // action: the server emits an event
         await ticker.emitTick('tick-1');
 
-        // expectation: the event arrives at the client listener
         await waitFor(() => expect(received).to.eql(['tick-1']));
     });
 
     it('recovers api calls after the connection is cut and auto-reconnects', async () => {
-        // setup: a working client-server link
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -73,17 +64,14 @@ describe('transport resilience (real socket)', function () {
         const echo = client.remoteApi<{ echo(value: string): Promise<string> }>('processing', 'echo');
         expect(await echo.echo('before')).to.equal('before');
 
-        // action: hard-cut the TCP connection and wait for the automatic reconnect
         const reconnected = client.waitForReconnect('processing');
         lab.network.cutConnection();
         await reconnected;
 
-        // expectation: calls made after the reconnect complete normally
         expect(await echo.echo('after')).to.equal('after');
     });
 
     it('resumes event subscriptions after a reconnect (listener re-registration)', async () => {
-        // setup: a client listening to server events over the socket
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -102,7 +90,6 @@ describe('transport resilience (real socket)', function () {
         await ticker.emitTick('before-cut');
         await waitFor(() => expect(received).to.eql(['before-cut']));
 
-        // action: cut the connection, wait for reconnect, then emit again
         const reconnected = client.waitForReconnect('processing');
         lab.network.cutConnection();
         await reconnected;
@@ -111,13 +98,11 @@ describe('transport resilience (real socket)', function () {
             expect(received).to.include('after-reconnect');
         });
 
-        // expectation: the listener keeps receiving events after the reconnect
         expect(received[0]).to.equal('before-cut');
         expect(received).to.include('after-reconnect');
     });
 
     it('a RemoteValue subscriber converges to the latest value after a reconnect', async () => {
-        // setup: a client subscribed to a server RemoteValue
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -131,7 +116,6 @@ describe('transport resilience (real socket)', function () {
         counter.setValueAndNotify(1);
         await waitFor(() => expect(received).to.eql([{ value: 1, version: 1 }]));
 
-        // action: cut the connection, change the value while disconnected, reconnect and re-sync
         const reconnected = client.waitForReconnect('processing');
         lab.network.cutConnection();
         counter.setValueAndNotify(2);
@@ -139,7 +123,6 @@ describe('transport resilience (real socket)', function () {
         await reconnected;
         await client.resyncRemoteValues('processing');
 
-        // expectation: the subscriber ends up on the latest value and version
         await waitFor(() => {
             const last = received[received.length - 1];
             expect(last?.value, 'latest value').to.equal(3);
@@ -148,7 +131,6 @@ describe('transport resilience (real socket)', function () {
     });
 
     it('documented gap: a dropped call message leaves the caller pending with no retry', async () => {
-        // setup: a healthy connection with a one-shot outgoing message drop
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -162,7 +144,6 @@ describe('transport resilience (real socket)', function () {
         const echo = client.remoteApi<{ echo(value: string): Promise<string> }>('processing', 'echo');
         lab.network.dropNextClientToServer();
 
-        // action: make a call whose message is silently lost by the network
         let settled = false;
         echo.echo('lost').then(
             () => (settled = true),
@@ -170,15 +151,12 @@ describe('transport resilience (real socket)', function () {
         );
         await sleep(300);
 
-        // expectation (current behavior): the server never saw the call, the caller
-        // is still pending (it would only reject after the 5-minute callback timeout)
         expect(serverCalls, 'server never received the call').to.equal(0);
         expect(settled, 'caller still pending — no retry, no fast failure').to.equal(false);
         expect(Object.keys(client.status().pendingCallbacks), 'one leaked pending callback').to.have.lengthOf(1);
     });
 
     it('documented gap: a duplicated call message invokes the remote api twice', async () => {
-        // setup: a healthy connection that duplicates the next outgoing message
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -191,15 +169,12 @@ describe('transport resilience (real socket)', function () {
         const recorder = client.remoteApi<{ record(): Promise<void> }>('processing', 'recorder');
         lab.network.duplicateNextClientToServer();
 
-        // action: a single call is delivered twice by the network
         await recorder.record();
 
-        // expectation (current behavior): no idempotency — the api runs twice
         await waitFor(() => expect(serverCalls, 'api executed once per delivery').to.equal(2));
     });
 
     it('documented gap: reordered messages are applied out of order (no sequencing)', async () => {
-        // setup: a recorder api and a network that holds outgoing messages
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -211,7 +186,6 @@ describe('transport resilience (real socket)', function () {
         });
         const recorder = client.remoteApi<{ record(value: string): Promise<void> }>('processing', 'recorder');
 
-        // action: send two calls while the network is held, then release them reversed
         lab.network.holdClientToServer();
         const first = recorder.record('first');
         const second = recorder.record('second');
@@ -219,13 +193,10 @@ describe('transport resilience (real socket)', function () {
         lab.network.releaseClientToServer({ reversed: true });
         await Promise.all([first, second]);
 
-        // expectation (current behavior): the server applies them in arrival order,
-        // not send order — nothing detects or corrects the inversion
         expect(receivedOrder).to.eql(['second', 'first']);
     });
 
     it('documented behavior: the server disposes all client env state on any socket drop', async () => {
-        // setup: a connected client and a server-side dispose observer
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -234,16 +205,12 @@ describe('transport resilience (real socket)', function () {
         await echo.echo('establish-connection');
         const disposedEnv = server.onceEnvironmentDisposed();
 
-        // action: a transient network blip (hard cut; the client auto-reconnects)
         lab.network.cutConnection();
 
-        // expectation (current behavior): even a momentary drop makes the server
-        // dispose the client's environment record — listeners and pending state die with it
         expect(await disposedEnv).to.contain('editor');
     });
 
     it('leaves no pending callbacks or leaked listener handlers after subscribe/unsubscribe cycles', async () => {
-        // setup: a subscribable server api
         lab = await CommLab.create();
         const server = lab.addServerEnv('processing');
         const client = await lab.addClientEnv('editor', { connectTo: ['processing'] });
@@ -260,15 +227,12 @@ describe('transport resilience (real socket)', function () {
             offTick: { removeListener: 'onTick' },
         });
 
-        // action: several subscribe/unsubscribe cycles
         for (let i = 0; i < 3; i++) {
             const listener = () => undefined;
             await ticker.onTick(listener);
             await ticker.offTick(listener);
         }
 
-        // expectation: the client bookkeeping is clean — no pending callbacks and no
-        // dangling listener handler entries (oracle over Communication internals)
         await waitFor(() => {
             const status = client.status();
             expect(Object.keys(status.pendingCallbacks), 'pending callbacks').to.have.lengthOf(0);
