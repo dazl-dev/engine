@@ -52,10 +52,13 @@ class FaultGate {
     private duplicateRemaining = 0;
     private holding = false;
     private held: Message[] = [];
+    /** Count of messages that entered this gate (including dropped/held ones). */
+    messageCount = 0;
 
     constructor(private deliver: (message: Message) => void) {}
 
     pass(message: Message) {
+        this.messageCount++;
         if (this.dropRemaining > 0) {
             this.dropRemaining--;
             return;
@@ -166,6 +169,17 @@ export class NetworkControl {
         for (const { incoming } of this.gates(scope)) {
             incoming.dropNext(count);
         }
+    }
+
+    /** Message counts per client link, in each direction (transport cost oracle). */
+    stats(scope?: FaultScope): { clientToServer: number; serverToClient: number } {
+        let clientToServer = 0;
+        let serverToClient = 0;
+        for (const { outgoing, incoming } of this.gates(scope)) {
+            clientToServer += outgoing.messageCount;
+            serverToClient += incoming.messageCount;
+        }
+        return { clientToServer, serverToClient };
     }
 
     /**
