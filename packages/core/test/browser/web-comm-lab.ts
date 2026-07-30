@@ -140,6 +140,35 @@ export class WebCommLab {
         b.com.registerEnv(a.name, a.getTarget());
     }
 
+    /**
+     * Reload an iframe's document — a real navigation. The Window behind the
+     * WindowProxy is replaced, so all listeners the old env attached are gone.
+     */
+    reloadIframe(env: WebEnv): Promise<void> {
+        const iframe = this.envIframes.get(env);
+        if (!iframe?.contentWindow) {
+            throw new Error(`env "${env.name}" is not a live iframe env`);
+        }
+        const loaded = new Promise<void>((resolve) => {
+            iframe.addEventListener('load', () => resolve(), { once: true });
+        });
+        iframe.contentWindow.location.reload();
+        return loaded;
+    }
+
+    /** Boot a fresh environment on a reloaded iframe's new window (the "env restart" flow). */
+    reattachIframeEnv(env: WebEnv, name: string): WebEnv {
+        const iframe = this.envIframes.get(env);
+        if (!iframe?.contentWindow) {
+            throw new Error(`env "${env.name}" is not a live iframe env`);
+        }
+        const target = new WindowTarget(iframe.contentWindow, name);
+        const fresh = new WebEnv(name, new Communication(target, name), target);
+        this.envs.push(fresh);
+        this.envIframes.set(fresh, iframe);
+        return fresh;
+    }
+
     /** Remove an iframe from the document — its window (and transport) dies with it. */
     killIframe(env: WebEnv) {
         const iframe = this.envIframes.get(env);

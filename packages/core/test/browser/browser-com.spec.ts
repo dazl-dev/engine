@@ -102,6 +102,44 @@ describeInBrowser('browser transports (real postMessage)', function () {
         expect(settled, 'caller still pending — nobody notices the iframe is gone').to.equal(false);
     });
 
+    it('documented gap: after an iframe reload (real navigation) calls hang with no restart detection', async () => {
+        lab = new WebCommLab();
+        const main = lab.addWindowEnv('main');
+        const frame = lab.addIframeEnv('frame');
+        lab.linkEnvs(main, frame);
+        frame.exposeApi('echo', { echo: (value: string) => value });
+        const echo = main.remoteApi<{ echo(value: string): Promise<string> }>('frame', 'echo');
+        expect(await echo.echo('before-reload')).to.equal('before-reload');
+
+        await lab.reloadIframe(frame);
+        let settled = false;
+        echo.echo('after-reload').then(
+            () => (settled = true),
+            () => (settled = true),
+        );
+        await sleep(300);
+
+        expect(settled, 'the reloaded window lost all listeners; the caller hangs').to.equal(false);
+    });
+
+    it('a freshly booted env on a reloaded iframe restores communication', async () => {
+        lab = new WebCommLab();
+        const main = lab.addWindowEnv('main');
+        const frame = lab.addIframeEnv('frame');
+        lab.linkEnvs(main, frame);
+        frame.exposeApi('echo', { echo: (value: string) => value });
+        const echo = main.remoteApi<{ echo(value: string): Promise<string> }>('frame', 'echo');
+        expect(await echo.echo('before-reload')).to.equal('before-reload');
+
+        await lab.reloadIframe(frame);
+        const rebooted = lab.reattachIframeEnv(frame, 'frame');
+        rebooted.exposeApi('echo', { echo: (value: string) => `rebooted:${value}` });
+        main.com.clearEnvironment('frame');
+        lab.linkEnvs(main, rebooted);
+
+        expect(await echo.echo('again')).to.equal('rebooted:again');
+    });
+
     it('documented gap: a hostile iframe can invoke page apis (no origin validation)', async () => {
         lab = new WebCommLab();
         const main = lab.addWindowEnv('main');
