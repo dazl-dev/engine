@@ -44,7 +44,7 @@
     "chai": "^6.2.2",
     "chai-as-promised": "^8.0.2",
     "create-temp-directory": "^2.5.0",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-no-only-tests": "^3.4.0",
