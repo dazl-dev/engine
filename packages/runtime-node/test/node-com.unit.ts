@@ -329,8 +329,9 @@ describe('Socket communication', () => {
         async function connectClient(
             identityExtractor?: IdentityExtractor,
             clientOptions?: ConstructorParameters<typeof WsClientHost>[1],
+            hostOptions?: ConstructorParameters<typeof WsServerHost>[2],
         ) {
-            const serverHost = disposeAfterTest(new WsServerHost(nameSpace, identityExtractor));
+            const serverHost = disposeAfterTest(new WsServerHost(nameSpace, identityExtractor, hostOptions));
             const clientHost = disposeAfterTest(new WsClientHost(serverTopology['server-host']!, clientOptions));
             await clientHost.connected;
             return { serverHost, clientHost };
@@ -344,9 +345,16 @@ describe('Socket communication', () => {
             return received;
         }
 
-        async function makeCall(serverHost: WsServerHost, clientHost: WsClientHost) {
+        async function makeCall(
+            serverHost: WsServerHost,
+            clientHost: WsClientHost,
+            /** What the calling side stamps on its outgoing messages, as a forwarding peer does. */
+            forwardedIdentity?: CallerIdentity,
+        ) {
             const serverCom = new Communication(serverHost, 'server-host');
-            const clientCom = new Communication(clientHost, 'client-host', serverTopology);
+            const clientCom = new Communication(clientHost, 'client-host', serverTopology, undefined, undefined, {
+                getCallerIdentity: () => forwardedIdentity,
+            });
             serverCom.registerAPI<ICommunicationTestApi>(
                 { id: 'test' },
                 { sayHello: () => 'hi', sayHelloWithDataAndParams: (n) => n },
@@ -378,6 +386,77 @@ describe('Socket communication', () => {
 
             const callMsg = received.find((m) => m.type === 'call');
             expect(callMsg?.callerIdentity).to.eq(undefined);
+        });
+
+        it('replaces an identity a client sends itself, so it cannot claim one', async () => {
+            const { serverHost, clientHost } = await connectClient();
+            const received = collectMessages(serverHost);
+
+            await makeCall(serverHost, clientHost, { userId: 'someone-else' });
+
+            const callMsg = received.find((m) => m.type === 'call');
+            expect(callMsg?.callerIdentity).to.eq(undefined);
+        });
+
+        it('keeps the identity a trusted peer forwards', async () => {
+            // the peer's own host authenticated the caller; this host has no
+            // handshake of its own to derive them from
+            const forwarded: CallerIdentity = { userId: 'alice' };
+            const trustsForwardedIdentity = sinon.spy(() => true);
+            const { serverHost, clientHost } = await connectClient(undefined, undefined, { trustsForwardedIdentity });
+            const received = collectMessages(serverHost);
+
+            await makeCall(serverHost, clientHost, forwarded);
+
+            const callMsg = received.find((m) => m.type === 'call');
+            expect(callMsg?.callerIdentity).to.eql(forwarded);
+            expect(trustsForwardedIdentity.callCount, 'resolved once per connection').to.eq(1);
+        });
+
+        it('falls back to the connection identity for a trusted peer own calls', async () => {
+            const connectionIdentity: CallerIdentity = { userId: 'the-peer' };
+            const { serverHost, clientHost } = await connectClient(() => connectionIdentity, undefined, {
+                trustsForwardedIdentity: () => true,
+            });
+            const received = collectMessages(serverHost);
+
+            // nothing forwarded: the peer is calling on its own behalf
+            await makeCall(serverHost, clientHost);
+
+            const callMsg = received.find((m) => m.type === 'call');
+            expect(callMsg?.callerIdentity).to.eql(connectionIdentity);
+        });
+
+        it('still replaces the identity of a connection the predicate rejects', async () => {
+            const { serverHost, clientHost } = await connectClient(undefined, undefined, {
+                trustsForwardedIdentity: () => false,
+            });
+            const received = collectMessages(serverHost);
+
+            await makeCall(serverHost, clientHost, { userId: 'someone-else' });
+
+            const callMsg = received.find((m) => m.type === 'call');
+            expect(callMsg?.callerIdentity).to.eq(undefined);
+        });
+
+        it('does not trust a peer when the predicate throws', async () => {
+            const consoleErrorStub = sinon.stub(console, 'error');
+            try {
+                const { serverHost, clientHost } = await connectClient(undefined, undefined, {
+                    trustsForwardedIdentity: () => {
+                        throw new Error('test error');
+                    },
+                });
+                const received = collectMessages(serverHost);
+
+                await makeCall(serverHost, clientHost, { userId: 'someone-else' });
+
+                const callMsg = received.find((m) => m.type === 'call');
+                expect(callMsg, 'the connection still works').to.not.eq(undefined);
+                expect(callMsg?.callerIdentity).to.eq(undefined);
+            } finally {
+                consoleErrorStub.restore();
+            }
         });
 
         it('connection succeeds and messages flow even when identityExtractor throws', async () => {

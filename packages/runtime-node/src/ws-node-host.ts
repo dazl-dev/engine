@@ -31,6 +31,39 @@ export class WsHost extends BaseHost {
  */
 export type IdentityExtractor = (handshake: io.Socket['handshake'], clientId: string) => CallerIdentity | undefined;
 
+/**
+ * Whether a connection is a trusted peer: an environment that forwards calls
+ * made by *its* clients, having already established who they are.
+ */
+export type PeerTrustPredicate = (handshake: io.Socket['handshake'], clientId: string) => boolean;
+
+export interface WsServerHostOptions {
+    /**
+     * Connections whose messages may keep the `callerIdentity` they arrive with,
+     * instead of having it replaced by this host's own (see
+     * {@link WsServerHost}).
+     *
+     * For a topology where a client reaches this environment through another
+     * one: the first server host authenticates the client and stamps the
+     * identity, and this host has no handshake of its own to derive it from -
+     * without this, the identity is dropped on the second hop and the call
+     * arrives anonymous.
+     *
+     * Say yes only for a connection the deployment itself authenticates (a
+     * shared secret in the handshake, a private network). Any client that this
+     * returns true for can name whoever it likes.
+     */
+    trustsForwardedIdentity?: PeerTrustPredicate;
+}
+
+/**
+ * Server side of the socket transport.
+ *
+ * Identity is decided per connection, not per message: a client cannot name
+ * itself, because `callerIdentity` on everything it sends is replaced with what
+ * this host derived from its handshake. The exception is a connection accepted
+ * as a trusted peer - see {@link WsServerHostOptions.trustsForwardedIdentity}.
+ */
 export class WsServerHost extends BaseHost implements IDisposable {
     private connectionHandlers = new Set<IConnectionHandler>();
     private disconnectionHandlers = new Set<IConnectionHandler>();
@@ -40,12 +73,16 @@ export class WsServerHost extends BaseHost implements IDisposable {
     private disposables = new SafeDisposable(WsServerHost.name);
     private identityStore = new Map<string, CallerIdentity>();
     private identityExtractor?: IdentityExtractor;
+    private trustsForwardedIdentity?: PeerTrustPredicate;
+    /** Clients accepted as peers, resolved once per connection. */
+    private trustedPeers = new Set<string>();
     dispose = this.disposables.dispose;
     isDisposed = this.disposables.isDisposed;
 
     constructor(
         private server: io.Server | io.Namespace,
         identityExtractor?: IdentityExtractor,
+        options?: WsServerHostOptions,
     ) {
         super();
         this.server.on('connection', this.onConnection);
@@ -55,6 +92,8 @@ export class WsServerHost extends BaseHost implements IDisposable {
         this.disposables.add('clear disconnection handlers', () => this.disconnectionHandlers.clear());
         this.disposables.add('clear reconnection handlers', () => this.reconnectionHandlers.clear());
         this.identityExtractor = identityExtractor;
+        this.trustsForwardedIdentity = options?.trustsForwardedIdentity;
+        this.disposables.add('clear trusted peers', () => this.trustedPeers.clear());
     }
 
     public registerConnectionHandler(handler: IConnectionHandler) {
@@ -110,6 +149,17 @@ export class WsServerHost extends BaseHost implements IDisposable {
 
         this.clientIdToSocket.set(clientId, socket);
 
+        const trustsForwardedIdentity = this.trustsForwardedIdentity;
+        if (trustsForwardedIdentity) {
+            this.callWithErrorHandling(() => {
+                if (trustsForwardedIdentity(socket.handshake, clientId)) {
+                    this.trustedPeers.add(clientId);
+                } else {
+                    this.trustedPeers.delete(clientId);
+                }
+            });
+        }
+
         const extractor = this.identityExtractor;
         if (extractor) {
             this.callWithErrorHandling(() => {
@@ -151,8 +201,16 @@ export class WsServerHost extends BaseHost implements IDisposable {
             // modify message to be able to forward it
             message.from = fromId;
             message.origin = originId;
-            // we always set clientIdentity, even if undefined to prevent client from passing something.
-            message.callerIdentity = this.identityStore.get(clientId);
+            const connectionIdentity = this.identityStore.get(clientId);
+            if (this.trustedPeers.has(clientId)) {
+                // a peer forwarding someone else's call: keep the identity the
+                // host that authenticated them already stamped, and fall back to
+                // this connection's own for calls the peer makes itself
+                message.callerIdentity = message.callerIdentity ?? connectionIdentity;
+            } else {
+                // always set, even to undefined, so a client cannot pass its own
+                message.callerIdentity = connectionIdentity;
+            }
 
             this.emitMessageHandlers(message);
         };
@@ -174,6 +232,7 @@ export class WsServerHost extends BaseHost implements IDisposable {
             }
             if (this.clientIdToSocket.get(clientId) === socket) {
                 this.identityStore.delete(clientId);
+                this.trustedPeers.delete(clientId);
                 this.clientIdToSocket.delete(clientId);
                 for (const handler of this.disconnectionHandlers) {
                     this.callWithErrorHandling(() => handler(connectionEvent));

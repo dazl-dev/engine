@@ -10,7 +10,7 @@ import { IDisposable, SetMultiMap } from '@dazl/patterns';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { extname } from 'node:path';
-import { ConnectionHandlers, IdentityExtractor, WsServerHost } from './ws-node-host.js';
+import { ConnectionHandlers, IdentityExtractor, PeerTrustPredicate, WsServerHost } from './ws-node-host.js';
 import { ILaunchHttpServerOptions, launchEngineHttpServer } from './launch-http-server.js';
 import { workerThreadInitializer2 } from './worker-thread-initializer2.js';
 import { bindMetricsListener, type PerformanceMetrics } from './metrics-utils.js';
@@ -25,6 +25,16 @@ export interface RunningNodeEnvironment {
 export interface NodeEnvConfig extends Pick<AnyEnvironment, 'env' | 'endpointType'> {
     envType: AnyEnvironment['envType'] | 'remote';
     remoteUrl?: string;
+    /**
+     * Socket.IO handshake `auth` for a remote environment, so the host on the
+     * other side can tell who is connecting - e.g. to accept this process as a
+     * trusted peer and keep the caller identity of the calls it forwards (see
+     * `WsServerHostOptions.trustsForwardedIdentity`).
+     *
+     * Typed structurally rather than as socket.io-client's `auth`: this package
+     * does not depend on the client, it only passes the value through.
+     */
+    remoteAuth?: Record<string, unknown>;
 }
 
 export type NodeEnvsFeatureMapping = {
@@ -53,10 +63,12 @@ export class NodeEnvManager implements IDisposable {
         {
             connectionHandlers,
             identityExtractor,
+            trustsForwardedIdentity,
             ...serverOptions
         }: ILaunchHttpServerOptions & {
             connectionHandlers?: ConnectionHandlers;
             identityExtractor?: IdentityExtractor;
+            trustsForwardedIdentity?: PeerTrustPredicate;
         } = {},
         lazy = false,
     ) {
@@ -68,7 +80,7 @@ export class NodeEnvManager implements IDisposable {
         const { port, socketServer, app, close } = await launchEngineHttpServer({ staticDirPath, ...serverOptions });
         runtimeOptions.set('enginePort', port.toString());
 
-        const clientsHost = new WsServerHost(socketServer, identityExtractor);
+        const clientsHost = new WsServerHost(socketServer, identityExtractor, { trustsForwardedIdentity });
         const disposeOnConnectionOpen = connectionHandlers?.onConnectionOpen
             ? clientsHost.registerConnectionHandler(connectionHandlers.onConnectionOpen)
             : undefined;
@@ -195,7 +207,12 @@ export class NodeEnvManager implements IDisposable {
             if (!env.remoteUrl) {
                 throw new Error(`Remote URL for environment ${envName} is not defined`);
             }
-            runningEnv = await socketClientInitializer({ communication: forwardingCom, env, envUrl: env.remoteUrl });
+            runningEnv = await socketClientInitializer({
+                communication: forwardingCom,
+                env,
+                envUrl: env.remoteUrl,
+                auth: env.remoteAuth,
+            });
         } else {
             const envWithInit = workerThreadInitializer2({
                 communication: forwardingCom,
