@@ -86,7 +86,7 @@ export class Communication {
     private rootEnvName: string;
     private idsCounter = new MultiCounter();
     private disposing = false;
-    private readonly callbackTimeout = 60_000 * 5; // 5 minutes
+    private readonly callbackTimeout = 60_000 * 60; // 1 hour: session startup can include slow dependency installs
     private readonly slowThreshold = 5_000; // 5 seconds
     private pendingEnvs: SetMultiMap<string, () => void> = new SetMultiMap();
     private pendingMessages = new SetMultiMap<string, AnyFunction>();

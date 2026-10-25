@@ -20,7 +20,7 @@ import * as chai from 'chai';
 import { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { sleep, waitFor } from 'promise-assist';
-import { spy, stub } from 'sinon';
+import { spy, stub, useFakeTimers } from 'sinon';
 import sinonChai from 'sinon-chai';
 
 chai.use(sinonChai);
@@ -36,6 +36,63 @@ describe('Communication', () => {
     const disposables = createDisposables();
 
     afterEach(() => disposables.dispose());
+
+    describe('long-running RPCs', () => {
+        function setup() {
+            const host = new BaseHost();
+            const childHost = host.open();
+            const main = new Communication(host, 'main');
+            const child = new Communication(childHost, 'child');
+            main.registerEnv('child', childHost);
+            child.registerEnv('main', host);
+            disposables.add(main);
+            disposables.add(child);
+            let finish!: (value: string) => void;
+            child.registerAPI(
+                { id: 'startup' },
+                {
+                    start: () =>
+                        new Promise<string>((resolve) => {
+                            finish = resolve;
+                        }),
+                },
+            );
+            const proxy = main.apiProxy<{ start(): Promise<string> }>({ id: 'child' }, { id: 'startup' });
+            return { proxy, finish: (value: string) => finish(value) };
+        }
+
+        it('allows a startup RPC to finish after five minutes', async () => {
+            const clock = useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            try {
+                const { proxy, finish } = setup();
+                const settled = spy();
+                const result = proxy.start();
+                void result.then(settled, settled);
+                await clock.tickAsync(30 * 60_000);
+                expect(settled.called).to.equal(false);
+                finish('ready');
+                expect(await result).to.equal('ready');
+            } finally {
+                clock.restore();
+            }
+        });
+
+        it('still rejects an unanswered RPC after one hour', async () => {
+            const clock = useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            try {
+                const { proxy } = setup();
+                const settled = spy();
+                void proxy.start().then(settled, settled);
+                await clock.tickAsync(60 * 60_000 - 1);
+                expect(settled.called).to.equal(false);
+                await clock.tickAsync(1);
+                expect(settled.callCount).to.equal(1);
+                expect(settled.firstCall.args[0]).to.have.property('name', 'CallbackTimeoutError');
+            } finally {
+                clock.restore();
+            }
+        });
+    });
 
     it('single communication', async () => {
         const host = new BaseHost();
